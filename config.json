@@ -1,0 +1,17 @@
+{
+    "llms": [
+        {
+            "name": "GPT-4o",
+            "api_key": "your_gpt4_api_key",
+            "model": "gpt-4o"
+        },
+        {
+            "name": "LLaMA-7B",
+            "api_key": "your_llama_api_key",
+            "model": "llama-7b"
+        }
+    ],
+    "current_llm": "LLaMA-7B",
+    "setting2": "value2",
+    "setting3": 123
+}

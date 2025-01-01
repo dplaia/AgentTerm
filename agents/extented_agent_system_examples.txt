@@ -1,0 +1,1036 @@
+Here are some examples of using PydanticAI in various ways.
+
+# Pydantic Model
+
+Simple example of using PydanticAI to construct a Pydantic model from a text input.
+
+Demonstrates:
+
+    structured result_type
+
+Example Code
+
+import os
+from typing import cast
+
+import logfire
+from pydantic import BaseModel
+
+from pydantic_ai import Agent
+from pydantic_ai.models import KnownModelName
+
+# 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
+logfire.configure(send_to_logfire='if-token-present')
+
+
+class MyModel(BaseModel):
+    city: str
+    country: str
+
+
+model = cast(KnownModelName, os.getenv('PYDANTIC_AI_MODEL', 'openai:gpt-4o'))
+print(f'Using model: {model}')
+agent = Agent(model, result_type=MyModel)
+
+if __name__ == '__main__':
+    result = agent.run_sync('The windy city in the US of A.')
+    print(result.data)
+    print(result.cost())
+	
+	
+
+# Weather agent
+
+Example of PydanticAI with multiple tools which the LLM needs to call in turn to answer a question.
+
+Demonstrates:
+
+    tools
+    agent dependencies
+    streaming text responses
+
+In this case the idea is a "weather" agent — the user can ask for the weather in multiple locations, the agent will use the get_lat_lng tool to get the latitude and longitude of the locations, then use the get_weather tool to get the weather for those locations.
+
+Example Code
+
+from __future__ import annotations as _annotations
+
+import asyncio
+import os
+from dataclasses import dataclass
+from typing import Any
+
+import logfire
+from devtools import debug
+from httpx import AsyncClient
+
+from pydantic_ai import Agent, ModelRetry, RunContext
+
+# 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
+logfire.configure(send_to_logfire='if-token-present')
+
+
+@dataclass
+class Deps:
+    client: AsyncClient
+    weather_api_key: str | None
+    geo_api_key: str | None
+
+
+weather_agent = Agent(
+    'openai:gpt-4o',
+    system_prompt='Be concise, reply with one sentence.',
+    deps_type=Deps,
+    retries=2,
+)
+
+
+@weather_agent.tool
+async def get_lat_lng(
+    ctx: RunContext[Deps], location_description: str
+) -> dict[str, float]:
+    """Get the latitude and longitude of a location.
+
+    Args:
+        ctx: The context.
+        location_description: A description of a location.
+    """
+    if ctx.deps.geo_api_key is None:
+        # if no API key is provided, return a dummy response (London)
+        return {'lat': 51.1, 'lng': -0.1}
+
+    params = {
+        'q': location_description,
+        'api_key': ctx.deps.geo_api_key,
+    }
+    with logfire.span('calling geocode API', params=params) as span:
+        r = await ctx.deps.client.get('https://geocode.maps.co/search', params=params)
+        r.raise_for_status()
+        data = r.json()
+        span.set_attribute('response', data)
+
+    if data:
+        return {'lat': data[0]['lat'], 'lng': data[0]['lon']}
+    else:
+        raise ModelRetry('Could not find the location')
+
+
+@weather_agent.tool
+async def get_weather(ctx: RunContext[Deps], lat: float, lng: float) -> dict[str, Any]:
+    """Get the weather at a location.
+
+    Args:
+        ctx: The context.
+        lat: Latitude of the location.
+        lng: Longitude of the location.
+    """
+    if ctx.deps.weather_api_key is None:
+        # if no API key is provided, return a dummy response
+        return {'temperature': '21 °C', 'description': 'Sunny'}
+
+    params = {
+        'apikey': ctx.deps.weather_api_key,
+        'location': f'{lat},{lng}',
+        'units': 'metric',
+    }
+    with logfire.span('calling weather API', params=params) as span:
+        r = await ctx.deps.client.get(
+            'https://api.tomorrow.io/v4/weather/realtime', params=params
+        )
+        r.raise_for_status()
+        data = r.json()
+        span.set_attribute('response', data)
+
+    values = data['data']['values']
+    # https://docs.tomorrow.io/reference/data-layers-weather-codes
+    code_lookup = {
+        1000: 'Clear, Sunny',
+        1100: 'Mostly Clear',
+        1101: 'Partly Cloudy',
+        1102: 'Mostly Cloudy',
+        1001: 'Cloudy',
+        2000: 'Fog',
+        2100: 'Light Fog',
+        4000: 'Drizzle',
+        4001: 'Rain',
+        4200: 'Light Rain',
+        4201: 'Heavy Rain',
+        5000: 'Snow',
+        5001: 'Flurries',
+        5100: 'Light Snow',
+        5101: 'Heavy Snow',
+        6000: 'Freezing Drizzle',
+        6001: 'Freezing Rain',
+        6200: 'Light Freezing Rain',
+        6201: 'Heavy Freezing Rain',
+        7000: 'Ice Pellets',
+        7101: 'Heavy Ice Pellets',
+        7102: 'Light Ice Pellets',
+        8000: 'Thunderstorm',
+    }
+    return {
+        'temperature': f'{values["temperatureApparent"]:0.0f}°C',
+        'description': code_lookup.get(values['weatherCode'], 'Unknown'),
+    }
+
+
+async def main():
+    async with AsyncClient() as client:
+        # create a free API key at https://www.tomorrow.io/weather-api/
+        weather_api_key = os.getenv('WEATHER_API_KEY')
+        # create a free API key at https://geocode.maps.co/
+        geo_api_key = os.getenv('GEO_API_KEY')
+        deps = Deps(
+            client=client, weather_api_key=weather_api_key, geo_api_key=geo_api_key
+        )
+        result = await weather_agent.run(
+            'What is the weather like in London and in Wiltshire?', deps=deps
+        )
+        debug(result)
+        print('Response:', result.data)
+
+
+if __name__ == '__main__':
+    asyncio.run(main())
+	
+	
+# Bank support
+
+Small but complete example of using PydanticAI to build a support agent for a bank.
+
+Demonstrates:
+
+    dynamic system prompt
+    structured result_type
+    tools
+
+Example Code
+
+from dataclasses import dataclass
+
+from pydantic import BaseModel, Field
+
+from pydantic_ai import Agent, RunContext
+
+
+class DatabaseConn:
+    """This is a fake database for example purposes.
+
+    In reality, you'd be connecting to an external database
+    (e.g. PostgreSQL) to get information about customers.
+    """
+
+    @classmethod
+    async def customer_name(cls, *, id: int) -> str | None:
+        if id == 123:
+            return 'John'
+
+    @classmethod
+    async def customer_balance(cls, *, id: int, include_pending: bool) -> float:
+        if id == 123:
+            return 123.45
+        else:
+            raise ValueError('Customer not found')
+
+
+@dataclass
+class SupportDependencies:
+    customer_id: int
+    db: DatabaseConn
+
+
+class SupportResult(BaseModel):
+    support_advice: str = Field(description='Advice returned to the customer')
+    block_card: bool = Field(description='Whether to block their')
+    risk: int = Field(description='Risk level of query', ge=0, le=10)
+
+
+support_agent = Agent(
+    'openai:gpt-4o',
+    deps_type=SupportDependencies,
+    result_type=SupportResult,
+    system_prompt=(
+        'You are a support agent in our bank, give the '
+        'customer support and judge the risk level of their query. '
+        "Reply using the customer's name."
+    ),
+)
+
+
+@support_agent.system_prompt
+async def add_customer_name(ctx: RunContext[SupportDependencies]) -> str:
+    customer_name = await ctx.deps.db.customer_name(id=ctx.deps.customer_id)
+    return f"The customer's name is {customer_name!r}"
+
+
+@support_agent.tool
+async def customer_balance(
+    ctx: RunContext[SupportDependencies], include_pending: bool
+) -> str:
+    """Returns the customer's current account balance."""
+    balance = await ctx.deps.db.customer_balance(
+        id=ctx.deps.customer_id,
+        include_pending=include_pending,
+    )
+    return f'${balance:.2f}'
+
+
+deps = SupportDependencies(customer_id=123, db=DatabaseConn())
+result = support_agent.run_sync('What is my balance?', deps=deps)
+print(result.data)
+"""
+support_advice='Hello John, your current account balance, including pending transactions, is $123.45.' block_card=False risk=1
+"""
+
+result = support_agent.run_sync('I just lost my card!', deps=deps)
+print(result.data)
+"""
+support_advice="I'm sorry to hear that, John. We are temporarily blocking your card to prevent unauthorized transactions." block_card=True risk=8
+"""
+
+# SQL Generation
+
+Example demonstrating how to use PydanticAI to generate SQL queries based on user input.
+
+Demonstrates:
+
+    dynamic system prompt
+    structured result_type
+    result validation
+    agent dependencies
+
+Example Code
+
+import asyncio
+import sys
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from datetime import date
+from typing import Annotated, Any, Union
+
+import asyncpg
+import logfire
+from annotated_types import MinLen
+from devtools import debug
+from pydantic import BaseModel, Field
+from typing_extensions import TypeAlias
+
+from pydantic_ai import Agent, ModelRetry, RunContext
+
+# 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
+logfire.configure(send_to_logfire='if-token-present')
+logfire.instrument_asyncpg()
+
+DB_SCHEMA = """
+CREATE TABLE records (
+    created_at timestamptz,
+    start_timestamp timestamptz,
+    end_timestamp timestamptz,
+    trace_id text,
+    span_id text,
+    parent_span_id text,
+    level log_level,
+    span_name text,
+    message text,
+    attributes_json_schema text,
+    attributes jsonb,
+    tags text[],
+    is_exception boolean,
+    otel_status_message text,
+    service_name text
+);
+"""
+
+
+@dataclass
+class Deps:
+    conn: asyncpg.Connection
+
+
+class Success(BaseModel):
+    """Response when SQL could be successfully generated."""
+
+    sql_query: Annotated[str, MinLen(1)]
+    explanation: str = Field(
+        '', description='Explanation of the SQL query, as markdown'
+    )
+
+
+class InvalidRequest(BaseModel):
+    """Response the user input didn't include enough information to generate SQL."""
+
+    error_message: str
+
+
+Response: TypeAlias = Union[Success, InvalidRequest]
+agent = Agent(
+    'gemini-1.5-flash',
+    # Type ignore while we wait for PEP-0747, nonetheless unions will work fine everywhere else
+    result_type=Response,  # type: ignore
+    deps_type=Deps,
+)
+
+
+@agent.system_prompt
+async def system_prompt() -> str:
+    return f"""\
+Given the following PostgreSQL table of records, your job is to
+write a SQL query that suits the user's request.
+
+Database schema:
+
+{DB_SCHEMA}
+
+today's date = {date.today()}
+
+Example
+    request: show me records where foobar is false
+    response: SELECT * FROM records WHERE attributes->>'foobar' = false
+Example
+    request: show me records where attributes include the key "foobar"
+    response: SELECT * FROM records WHERE attributes ? 'foobar'
+Example
+    request: show me records from yesterday
+    response: SELECT * FROM records WHERE start_timestamp::date > CURRENT_TIMESTAMP - INTERVAL '1 day'
+Example
+    request: show me error records with the tag "foobar"
+    response: SELECT * FROM records WHERE level = 'error' and 'foobar' = ANY(tags)
+"""
+
+
+@agent.result_validator
+async def validate_result(ctx: RunContext[Deps], result: Response) -> Response:
+    if isinstance(result, InvalidRequest):
+        return result
+
+    # gemini often adds extraneous backslashes to SQL
+    result.sql_query = result.sql_query.replace('\\', '')
+    if not result.sql_query.upper().startswith('SELECT'):
+        raise ModelRetry('Please create a SELECT query')
+
+    try:
+        await ctx.deps.conn.execute(f'EXPLAIN {result.sql_query}')
+    except asyncpg.exceptions.PostgresError as e:
+        raise ModelRetry(f'Invalid query: {e}') from e
+    else:
+        return result
+
+
+async def main():
+    if len(sys.argv) == 1:
+        prompt = 'show me logs from yesterday, with level "error"'
+    else:
+        prompt = sys.argv[1]
+
+    async with database_connect(
+        'postgresql://postgres:postgres@localhost:54320', 'pydantic_ai_sql_gen'
+    ) as conn:
+        deps = Deps(conn)
+        result = await agent.run(prompt, deps=deps)
+    debug(result.data)
+
+
+# pyright: reportUnknownMemberType=false
+# pyright: reportUnknownVariableType=false
+@asynccontextmanager
+async def database_connect(server_dsn: str, database: str) -> AsyncGenerator[Any, None]:
+    with logfire.span('check and create DB'):
+        conn = await asyncpg.connect(server_dsn)
+        try:
+            db_exists = await conn.fetchval(
+                'SELECT 1 FROM pg_database WHERE datname = $1', database
+            )
+            if not db_exists:
+                await conn.execute(f'CREATE DATABASE {database}')
+        finally:
+            await conn.close()
+
+    conn = await asyncpg.connect(f'{server_dsn}/{database}')
+    try:
+        with logfire.span('create schema'):
+            async with conn.transaction():
+                if not db_exists:
+                    await conn.execute(
+                        "CREATE TYPE log_level AS ENUM ('debug', 'info', 'warning', 'error', 'critical')"
+                    )
+                await conn.execute(DB_SCHEMA)
+        yield conn
+    finally:
+        await conn.close()
+
+
+if __name__ == '__main__':
+    asyncio.run(main())
+	
+
+
+# RAG
+
+RAG search example. This demo allows you to ask question of the logfire documentation.
+
+Demonstrates:
+
+    tools
+    agent dependencies
+    RAG search
+
+This is done by creating a database containing each section of the markdown documentation, then registering the search tool with the PydanticAI agent.
+
+Logic for extracting sections from markdown files and a JSON file with that data is available in this gist.
+
+PostgreSQL with pgvector is used as the search database, the easiest way to download and run pgvector is using Docker:
+
+mkdir postgres-data
+docker run --rm \
+  -e POSTGRES_PASSWORD=postgres \
+  -p 54320:5432 \
+  -v `pwd`/postgres-data:/var/lib/postgresql/data \
+  pgvector/pgvector:pg17
+
+As with the SQL gen example, we run postgres on port 54320 to avoid conflicts with any other postgres instances you may have running. We also mount the PostgreSQL data directory locally to persist the data if you need to stop and restart the container.
+
+Example Code
+
+from __future__ import annotations as _annotations
+
+import asyncio
+import re
+import sys
+import unicodedata
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+
+import asyncpg
+import httpx
+import logfire
+import pydantic_core
+from openai import AsyncOpenAI
+from pydantic import TypeAdapter
+from typing_extensions import AsyncGenerator
+
+from pydantic_ai import RunContext
+from pydantic_ai.agent import Agent
+
+# 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
+logfire.configure(send_to_logfire='if-token-present')
+logfire.instrument_asyncpg()
+
+
+@dataclass
+class Deps:
+    openai: AsyncOpenAI
+    pool: asyncpg.Pool
+
+
+agent = Agent('openai:gpt-4o', deps_type=Deps)
+
+
+@agent.tool
+async def retrieve(context: RunContext[Deps], search_query: str) -> str:
+    """Retrieve documentation sections based on a search query.
+
+    Args:
+        context: The call context.
+        search_query: The search query.
+    """
+    with logfire.span(
+        'create embedding for {search_query=}', search_query=search_query
+    ):
+        embedding = await context.deps.openai.embeddings.create(
+            input=search_query,
+            model='text-embedding-3-small',
+        )
+
+    assert (
+        len(embedding.data) == 1
+    ), f'Expected 1 embedding, got {len(embedding.data)}, doc query: {search_query!r}'
+    embedding = embedding.data[0].embedding
+    embedding_json = pydantic_core.to_json(embedding).decode()
+    rows = await context.deps.pool.fetch(
+        'SELECT url, title, content FROM doc_sections ORDER BY embedding <-> $1 LIMIT 8',
+        embedding_json,
+    )
+    return '\n\n'.join(
+        f'# {row["title"]}\nDocumentation URL:{row["url"]}\n\n{row["content"]}\n'
+        for row in rows
+    )
+
+
+async def run_agent(question: str):
+    """Entry point to run the agent and perform RAG based question answering."""
+    openai = AsyncOpenAI()
+    logfire.instrument_openai(openai)
+
+    logfire.info('Asking "{question}"', question=question)
+
+    async with database_connect(False) as pool:
+        deps = Deps(openai=openai, pool=pool)
+        answer = await agent.run(question, deps=deps)
+    print(answer.data)
+
+
+#######################################################
+# The rest of this file is dedicated to preparing the #
+# search database, and some utilities.                #
+#######################################################
+
+# JSON document from
+# https://gist.github.com/samuelcolvin/4b5bb9bb163b1122ff17e29e48c10992
+DOCS_JSON = (
+    'https://gist.githubusercontent.com/'
+    'samuelcolvin/4b5bb9bb163b1122ff17e29e48c10992/raw/'
+    '80c5925c42f1442c24963aaf5eb1a324d47afe95/logfire_docs.json'
+)
+
+
+async def build_search_db():
+    """Build the search database."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(DOCS_JSON)
+        response.raise_for_status()
+    sections = sessions_ta.validate_json(response.content)
+
+    openai = AsyncOpenAI()
+    logfire.instrument_openai(openai)
+
+    async with database_connect(True) as pool:
+        with logfire.span('create schema'):
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+                    await conn.execute(DB_SCHEMA)
+
+        sem = asyncio.Semaphore(10)
+        async with asyncio.TaskGroup() as tg:
+            for section in sections:
+                tg.create_task(insert_doc_section(sem, openai, pool, section))
+
+
+async def insert_doc_section(
+    sem: asyncio.Semaphore,
+    openai: AsyncOpenAI,
+    pool: asyncpg.Pool,
+    section: DocsSection,
+) -> None:
+    async with sem:
+        url = section.url()
+        exists = await pool.fetchval('SELECT 1 FROM doc_sections WHERE url = $1', url)
+        if exists:
+            logfire.info('Skipping {url=}', url=url)
+
+        with logfire.span('create embedding for {url=}', url=url):
+            embedding = await openai.embeddings.create(
+                input=section.embedding_content(),
+                model='text-embedding-3-small',
+            )
+        assert (
+            len(embedding.data) == 1
+        ), f'Expected 1 embedding, got {len(embedding.data)}, doc section: {section}'
+        embedding = embedding.data[0].embedding
+        embedding_json = pydantic_core.to_json(embedding).decode()
+        await pool.execute(
+            'INSERT INTO doc_sections (url, title, content, embedding) VALUES ($1, $2, $3, $4)',
+            url,
+            section.title,
+            section.content,
+            embedding_json,
+        )
+
+
+@dataclass
+class DocsSection:
+    id: int
+    parent: int | None
+    path: str
+    level: int
+    title: str
+    content: str
+
+    def url(self) -> str:
+        url_path = re.sub(r'\.md$', '', self.path)
+        return (
+            f'https://logfire.pydantic.dev/docs/{url_path}/#{slugify(self.title, "-")}'
+        )
+
+    def embedding_content(self) -> str:
+        return '\n\n'.join((f'path: {self.path}', f'title: {self.title}', self.content))
+
+
+sessions_ta = TypeAdapter(list[DocsSection])
+
+
+# pyright: reportUnknownMemberType=false
+# pyright: reportUnknownVariableType=false
+@asynccontextmanager
+async def database_connect(
+    create_db: bool = False,
+) -> AsyncGenerator[asyncpg.Pool, None]:
+    server_dsn, database = (
+        'postgresql://postgres:postgres@localhost:54320',
+        'pydantic_ai_rag',
+    )
+    if create_db:
+        with logfire.span('check and create DB'):
+            conn = await asyncpg.connect(server_dsn)
+            try:
+                db_exists = await conn.fetchval(
+                    'SELECT 1 FROM pg_database WHERE datname = $1', database
+                )
+                if not db_exists:
+                    await conn.execute(f'CREATE DATABASE {database}')
+            finally:
+                await conn.close()
+
+    pool = await asyncpg.create_pool(f'{server_dsn}/{database}')
+    try:
+        yield pool
+    finally:
+        await pool.close()
+
+
+DB_SCHEMA = """
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS doc_sections (
+    id serial PRIMARY KEY,
+    url text NOT NULL UNIQUE,
+    title text NOT NULL,
+    content text NOT NULL,
+    -- text-embedding-3-small returns a vector of 1536 floats
+    embedding vector(1536) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_doc_sections_embedding ON doc_sections USING hnsw (embedding vector_l2_ops);
+"""
+
+
+def slugify(value: str, separator: str, unicode: bool = False) -> str:
+    """Slugify a string, to make it URL friendly."""
+    # Taken unchanged from https://github.com/Python-Markdown/markdown/blob/3.7/markdown/extensions/toc.py#L38
+    if not unicode:
+        # Replace Extended Latin characters with ASCII, i.e. `žlutý` => `zluty`
+        value = unicodedata.normalize('NFKD', value)
+        value = value.encode('ascii', 'ignore').decode('ascii')
+    value = re.sub(r'[^\w\s-]', '', value).strip().lower()
+    return re.sub(rf'[{separator}\s]+', separator, value)
+
+
+if __name__ == '__main__':
+    action = sys.argv[1] if len(sys.argv) > 1 else None
+    if action == 'build':
+        asyncio.run(build_search_db())
+    elif action == 'search':
+        if len(sys.argv) == 3:
+            q = sys.argv[2]
+        else:
+            q = 'How do I configure logfire to work with FastAPI?'
+        asyncio.run(run_agent(q))
+    else:
+        print(
+            'uv run --extra examples -m pydantic_ai_examples.rag build|search',
+            file=sys.stderr,
+        )
+        sys.exit(1)
+		
+# Stream markdown
+
+This example shows how to stream markdown from an agent, using the rich library to highlight the output in the terminal.
+
+It'll run the example with both OpenAI and Google Gemini models if the required environment variables are set.
+
+Demonstrates:
+
+    streaming text responses
+
+Example Code
+
+import asyncio
+import os
+
+import logfire
+from rich.console import Console, ConsoleOptions, RenderResult
+from rich.live import Live
+from rich.markdown import CodeBlock, Markdown
+from rich.syntax import Syntax
+from rich.text import Text
+
+from pydantic_ai import Agent
+from pydantic_ai.models import KnownModelName
+
+# 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
+logfire.configure(send_to_logfire='if-token-present')
+
+agent = Agent()
+
+# models to try, and the appropriate env var
+models: list[tuple[KnownModelName, str]] = [
+    ('gemini-1.5-flash', 'GEMINI_API_KEY'),
+    ('openai:gpt-4o-mini', 'OPENAI_API_KEY'),
+    ('groq:llama-3.1-70b-versatile', 'GROQ_API_KEY'),
+]
+
+
+async def main():
+    prettier_code_blocks()
+    console = Console()
+    prompt = 'Show me a short example of using Pydantic.'
+    console.log(f'Asking: {prompt}...', style='cyan')
+    for model, env_var in models:
+        if env_var in os.environ:
+            console.log(f'Using model: {model}')
+            with Live('', console=console, vertical_overflow='visible') as live:
+                async with agent.run_stream(prompt, model=model) as result:
+                    async for message in result.stream():
+                        live.update(Markdown(message))
+            console.log(result.cost())
+        else:
+            console.log(f'{model} requires {env_var} to be set.')
+
+
+def prettier_code_blocks():
+    """Make rich code blocks prettier and easier to copy.
+
+    From https://github.com/samuelcolvin/aicli/blob/v0.8.0/samuelcolvin_aicli.py#L22
+    """
+
+    class SimpleCodeBlock(CodeBlock):
+        def __rich_console__(
+            self, console: Console, options: ConsoleOptions
+        ) -> RenderResult:
+            code = str(self.text).rstrip()
+            yield Text(self.lexer_name, style='dim')
+            yield Syntax(
+                code,
+                self.lexer_name,
+                theme=self.theme,
+                background_color='default',
+                word_wrap=True,
+            )
+            yield Text(f'/{self.lexer_name}', style='dim')
+
+    Markdown.elements['fence'] = SimpleCodeBlock
+
+
+if __name__ == '__main__':
+    asyncio.run(main())
+	
+
+# Stream whales
+
+Information about whales — an example of streamed structured response validation.
+
+Demonstrates:
+
+    streaming structured responses
+
+This script streams structured responses from GPT-4 about whales, validates the data and displays it as a dynamic table using rich as the data is received.
+
+Example Code
+
+from typing import Annotated, NotRequired, TypedDict
+
+import devtools
+import logfire
+from pydantic import Field, ValidationError
+from rich.console import Console
+from rich.live import Live
+from rich.table import Table
+
+from pydantic_ai import Agent
+
+# 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
+logfire.configure(send_to_logfire='if-token-present')
+
+
+class Whale(TypedDict):
+    name: str
+    length: Annotated[
+        float, Field(description='Average length of an adult whale in meters.')
+    ]
+    weight: NotRequired[
+        Annotated[
+            float,
+            Field(description='Average weight of an adult whale in kilograms.', ge=50),
+        ]
+    ]
+    ocean: NotRequired[str]
+    description: NotRequired[Annotated[str, Field(description='Short Description')]]
+
+
+agent = Agent('openai:gpt-4', result_type=list[Whale])
+
+
+def check_validation_error(e: ValidationError) -> bool:
+    devtools.debug(e.errors())
+    return False
+
+
+async def main():
+    console = Console()
+    with Live('\n' * 36, console=console) as live:
+        console.print('Requesting data...', style='cyan')
+        async with agent.run_stream(
+            'Generate me details of 5 species of Whale.'
+        ) as result:
+            console.print('Response:', style='green')
+
+            async for message, last in result.stream_structured(debounce_by=0.01):
+                try:
+                    whales = await result.validate_structured_result(
+                        message, allow_partial=not last
+                    )
+                except ValidationError as exc:
+                    if all(
+                        e['type'] == 'missing' and e['loc'] == ('response',)
+                        for e in exc.errors()
+                    ):
+                        continue
+                    else:
+                        raise
+
+                table = Table(
+                    title='Species of Whale',
+                    caption='Streaming Structured responses from GPT-4',
+                    width=120,
+                )
+                table.add_column('ID', justify='right')
+                table.add_column('Name')
+                table.add_column('Avg. Length (m)', justify='right')
+                table.add_column('Avg. Weight (kg)', justify='right')
+                table.add_column('Ocean')
+                table.add_column('Description', justify='right')
+
+                for wid, whale in enumerate(whales, start=1):
+                    table.add_row(
+                        str(wid),
+                        whale['name'],
+                        f'{whale["length"]:0.0f}',
+                        f'{w:0.0f}' if (w := whale.get('weight')) else '…',
+                        whale.get('ocean') or '…',
+                        whale.get('description') or '…',
+                    )
+                live.update(table)
+
+
+if __name__ == '__main__':
+    import asyncio
+
+    asyncio.run(main())
+	
+# Chat app
+
+Simple chat app example build with FastAPI.
+
+Demonstrates:
+
+    reusing chat history
+    serializing messages
+    streaming responses
+
+This demonstrates storing chat history between requests and using it to give the model context for new responses.
+
+Most of the complex logic here is between chat_app.py which streams the response to the browser, and chat_app.ts which renders messages in the browser.
+
+Example Code
+
+from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Annotated
+
+import fastapi
+import logfire
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from pydantic import Field, TypeAdapter
+
+from pydantic_ai import Agent
+from pydantic_ai.messages import (
+    Message,
+    MessagesTypeAdapter,
+    ModelTextResponse,
+    UserPrompt,
+)
+
+# 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
+logfire.configure(send_to_logfire='if-token-present')
+
+agent = Agent('openai:gpt-4o')
+
+app = fastapi.FastAPI()
+logfire.instrument_fastapi(app)
+
+
+@app.get('/')
+async def index() -> HTMLResponse:
+    return HTMLResponse((THIS_DIR / 'chat_app.html').read_bytes())
+
+
+@app.get('/chat_app.ts')
+async def main_ts() -> Response:
+    """Get the raw typescript code, it's compiled in the browser, forgive me."""
+    return Response((THIS_DIR / 'chat_app.ts').read_bytes(), media_type='text/plain')
+
+
+@app.get('/chat/')
+async def get_chat() -> Response:
+    msgs = database.get_messages()
+    return Response(
+        b'\n'.join(MessageTypeAdapter.dump_json(m) for m in msgs),
+        media_type='text/plain',
+    )
+
+
+@app.post('/chat/')
+async def post_chat(prompt: Annotated[str, fastapi.Form()]) -> StreamingResponse:
+    async def stream_messages():
+        """Streams new line delimited JSON `Message`s to the client."""
+        # stream the user prompt so that can be displayed straight away
+        yield MessageTypeAdapter.dump_json(UserPrompt(content=prompt)) + b'\n'
+        # get the chat history so far to pass as context to the agent
+        messages = list(database.get_messages())
+        # run the agent with the user prompt and the chat history
+        async with agent.run_stream(prompt, message_history=messages) as result:
+            async for text in result.stream(debounce_by=0.01):
+                # text here is a `str` and the frontend wants
+                # JSON encoded ModelTextResponse, so we create one
+                m = ModelTextResponse(content=text, timestamp=result.timestamp())
+                yield MessageTypeAdapter.dump_json(m) + b'\n'
+
+        # add new messages (e.g. the user prompt and the agent response in this case) to the database
+        database.add_messages(result.new_messages_json())
+
+    return StreamingResponse(stream_messages(), media_type='text/plain')
+
+
+THIS_DIR = Path(__file__).parent
+MessageTypeAdapter: TypeAdapter[Message] = TypeAdapter(
+    Annotated[Message, Field(discriminator='role')]
+)
+
+
+@dataclass
+class Database:
+    """Very rudimentary database to store chat messages in a JSON lines file."""
+
+    file: Path = THIS_DIR / '.chat_app_messages.jsonl'
+
+    def add_messages(self, messages: bytes):
+        with self.file.open('ab') as f:
+            f.write(messages + b'\n')
+
+    def get_messages(self) -> Iterator[Message]:
+        if self.file.exists():
+            with self.file.open('rb') as f:
+                for line in f:
+                    if line:
+                        yield from MessagesTypeAdapter.validate_json(line)
+
+
+database = Database()
+
+if __name__ == '__main__':
+    import uvicorn
+
+    uvicorn.run(
+        'pydantic_ai_examples.chat_app:app', reload=True, reload_dirs=[str(THIS_DIR)]
+    )
+
