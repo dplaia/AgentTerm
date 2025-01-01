@@ -2,16 +2,31 @@ import os
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models.gemini import GeminiModel  # Or other models if needed
+from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.anthropic import AnthropicModel
 
 class BaseAgent(BaseModel):
     """
     Base class for pydantic-ai based agents.
     """
-    model_name: str = "gemini-2.0-flash-exp"  # Default model
-    system_prompt: str = "" # default system prompt
-    result_type: type[BaseModel] = None
-    api_key_env_var: str = "GEMINI_API_KEY"  # Default API key environment variable name
-    examples_file: str = None # path to file containing examples for the LLM
+    model_type: str = Field(
+        default="gemini", description="Model type, either 'gemini', 'openai', or 'anthropic'"
+    )
+    model_name: str = Field(
+        default="gemini-2.0-flash-exp", description="Model name"
+    )
+    system_prompt: str = Field(
+        default="", description="Default system prompt"
+    )
+    result_type: type[BaseModel] = Field(
+        default=None, description="Result type"
+    )
+    api_key_env_var: str = Field(
+        default=None, description="API key environment variable name"
+    )
+    examples_file: str = Field(
+        default=None, description="Path to file containing examples for the LLM"
+    )
 
     def get_api_key(self):
         """Retrieves the API key from the environment variable."""
@@ -22,7 +37,14 @@ class BaseAgent(BaseModel):
 
     def get_model(self):
         """Creates and returns the LLM model."""
-        return GeminiModel(self.model_name, api_key=self.get_api_key())
+        if self.model_type == "gemini":
+            return GeminiModel(self.model_name, api_key=self.get_api_key())
+        elif self.model_type == "openai":
+            return OpenAIModel(self.model_name, api_key=self.get_api_key())
+        elif self.model_type == "anthropic":
+            return AnthropicModel(self.model_name, api_key=self.get_api_key())
+        else:
+            raise ValueError(f"Unsupported model type: {self.model_type}")
 
     def create_agent(self):
         """Creates and returns the pydantic-ai Agent."""

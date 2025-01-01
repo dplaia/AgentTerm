@@ -2,16 +2,52 @@
     "llms": [
         {
             "name": "GPT-4o",
-            "api_key": "your_gpt4_api_key",
+            "api_key": "your_openai_api_key",
+            "model_type": "openai", 
             "model": "gpt-4o"
         },
         {
-            "name": "LLaMA-7B",
-            "api_key": "your_llama_api_key",
-            "model": "llama-7b"
+            "name": "gpt-4o-mini",
+            "api_key": "your_openai_api_key",
+            "model_type": "openai",
+            "model": "gpt-4o-mini"
+        },
+        {
+            "name": "o1-mini",
+            "api_key": "your_openai_api_key",   
+            "model_type": "openai",
+            "model": "o1-mini"
+        },
+        {
+            "name": "o1-preview",
+            "api_key": "your_openai_api_key",
+            "model_type": "openai",
+            "model": "o1-preview"
+        },
+        {
+            "name": "gemini-exp-1206",
+            "api_key": "your_gemini_api_key",
+            "model_type": "gemini",
+            "model": "gemini-exp-1206"
+        },
+        {
+            "name": "gemini-flash-exp",
+            "api_key": "your_gemini_api_key",
+            "model_type": "gemini",
+            "model": "gemini-2.0-flash-exp"
+        },
+        {
+            "name": "gemini-flash-exp-thinking",
+            "api_key": "your_gemini_api_key",   
+            "model_type": "gemini",
+            "model": "gemini-2.0-flash-thinking-exp-1219"
+        },
+        {
+            "name": "claude-3-5-sonnet",
+            "api_key": "your_anthropic_api_key",
+            "model_type": "anthropic",
+            "model": "claude-3-5-sonnet-20241022"
         }
     ],
-    "current_llm": "LLaMA-7B",
-    "setting2": "value2",
-    "setting3": 123
+    "current_llm": "gemini-flash-exp"
 }
