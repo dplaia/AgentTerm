@@ -24,12 +24,20 @@ class BaseAgent(BaseModel):
     api_key_env_var: str = Field(
         default=None, description="API key environment variable name"
     )
-    examples_file: str = Field(
-        default=None, description="Path to file containing examples for the LLM"
-    )
 
     def get_api_key(self):
         """Retrieves the API key from the environment variable."""
+        if self.api_key_env_var is None:
+            # Auto-select API key environment variable based on model type
+            env_var_mapping = {
+                "gemini": "GEMINI_API_KEY",
+                "openai": "OPENAI_API_KEY",
+                "anthropic": "ANTHROPIC_API_KEY"
+            }
+            self.api_key_env_var = env_var_mapping.get(self.model_type)
+            if not self.api_key_env_var:
+                raise ValueError(f"Unsupported model type for API key selection: {self.model_type}")
+
         api_key = os.getenv(self.api_key_env_var)
         if not api_key:
             raise ValueError(f"{self.api_key_env_var} environment variable not set.")
@@ -57,19 +65,21 @@ class BaseAgent(BaseModel):
             system_prompt=self.system_prompt,
         )
 
-    def run_agent(self, user_input: str):
+    def run_agent(self, user_input: str, keep_context: bool = False):
         """
         Runs the agent with the given user input.
         Adds examples to the user input, if a file is specified in self.examples_file.
         """
         agent = self.create_agent()
-        if self.examples_file:
-            examples_path = os.path.join(os.path.dirname(__file__), self.examples_file)
-            if os.path.exists(examples_path):
-                with open(examples_path, 'r') as file:
-                    examples = file.read()
-                user_input += examples
-            else:
-                print(f"Warning: Examples file not found: {examples_path}")
         
-        return agent.run_sync(user_input)
+        if not hasattr(self, '_message_history'):
+            self._message_history = None
+            
+        if keep_context:
+            result = agent.run_sync(user_input, message_history=self._message_history)
+            self._message_history = result.all_messages()
+            #print(f"All message history: {self._message_history}")
+        else:
+            result = agent.run_sync(user_input)
+
+        return result

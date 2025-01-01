@@ -2,18 +2,14 @@ from pydantic import BaseModel, Field
 from .base_agent import BaseAgent  # Import the BaseAgent
 import argparse
 
-class Response(BaseModel):
-    code: str = Field(description="The code for the agent system.")
+class ChatResponse(BaseModel):
+    text_response: str = Field(description="Your response.")
 
-class CodeGeneratorAgent(BaseAgent):
+class BasicChatbotAgent(BaseAgent):
     model_name: str = "gemini-2.0-flash-exp"  # You can override if needed
-    system_prompt: str = """You are an expert in building LLM agent systems.
-        After given a task description, you will use the pydanticAI framework to design an agent system by writing the code for the agent system.
-        Make sure that you make use of all features of PydanticAI in the best way possible.
-        If you are not sure how to implement the certain features, tools or functions, add some comments to the code to explain what could be done.
-        """
-    result_type: type[BaseModel] = Response
-    examples_file: str = "extented_agent_system_examples.txt" # path is relative to the agent1.py file
+    system_prompt: str = """You are a helpful and friendly chatbot assistant. You provide clear, concise, and accurate responses to user queries.
+        You maintain a conversational tone while being informative and professional."""
+    result_type: type[str] = str
 
 def add_arguments(parser):
     """
@@ -23,27 +19,31 @@ def add_arguments(parser):
 
 # The main_parser is used by the main program to generate help text for this agent.
 main_parser = argparse.ArgumentParser(
-    description="An agent that generates code for LLM agent systems using pydanticAI."
+    description="A basic QA assistant (e.g. chatbot)."
 )
 add_arguments(main_parser)
 
-def main(args=None, config=None):
+def main(args=None):
     """
-    Main function to run the agent.
+    Main function to run the interactive chatbot.
     """
-    if args is None:
-        args = main_parser.parse_args()
+    print("\nWelcome to the Interactive Chatbot!")
+    print("You can start chatting now. Type 'exit' or 'quit' to end the conversation.\n")
 
-    agent = CodeGeneratorAgent()
-    result = agent.run_agent(args.task_description)
+    agent = BasicChatbotAgent()
     
-    output_file = "agent_system_template.py"
-
-    # Save the code to a file
-    with open(output_file, "w") as f:
-        f.write(result.data.code.replace('\\n', '\n'))
-
-    print(f"Code saved to {output_file}")
+    while True:
+        user_input = input(">>>: ").strip()
+        
+        if user_input.lower() in ['exit', 'quit']:
+            print("\nGoodbye! Have a great day!")
+            break
+            
+        if not user_input:
+            continue
+            
+        result = agent.run_agent(user_input, keep_context=True)
+        print(f"\n>: {result.data}\n")
 
 if __name__ == "__main__":
     main()
