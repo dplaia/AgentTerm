@@ -1,13 +1,15 @@
 import os
+from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models.gemini import GeminiModel  # Or other models if needed
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.anthropic import AnthropicModel
 
-class BaseAgent(BaseModel):
+class BaseAgent(ABC, BaseModel):
     """
-    Base class for pydantic-ai based agents.
+    Abstract base class for pydantic-ai based agents.
+    Subclasses must implement the `run_agent` method.
     """
     model_type: str = Field(
         default="gemini", description="Model type, either 'gemini', 'openai', or 'anthropic'"
@@ -65,21 +67,10 @@ class BaseAgent(BaseModel):
             system_prompt=self.system_prompt,
         )
 
+    @abstractmethod
     def run_agent(self, user_input: str, keep_context: bool = False):
         """
-        Runs the agent with the given user input.
-        Adds examples to the user input, if a file is specified in self.examples_file.
+        Abstract method to run the agent with the given user input.
+        Subclasses must implement this method to define the specific agent logic.
         """
-        agent = self.create_agent()
-        
-        if not hasattr(self, '_message_history'):
-            self._message_history = None
-            
-        if keep_context:
-            result = agent.run_sync(user_input, message_history=self._message_history)
-            self._message_history = result.all_messages()
-            #print(f"All message history: {self._message_history}")
-        else:
-            result = agent.run_sync(user_input)
-
-        return result
+        pass

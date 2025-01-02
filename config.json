@@ -49,5 +49,12 @@
             "model": "claude-3-5-sonnet-20241022"
         }
     ],
-    "current_llm": "gemini-flash-exp"
+    "agents": [
+        {
+            "name": "BasicChatbotAgent",
+            "default_llm": "gemini-flash-exp-thinking"
+        }
+    ],
+
+    "current_llm": "gemini-flash-exp-thinking"
 }

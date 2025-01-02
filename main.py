@@ -141,7 +141,7 @@ def run_agent(agents, agent_name, config, agent_args=None):
 
     try:
         # Get the agent class dynamically
-        agent_class_name = agent_name.capitalize() + "Agent" # Assumes class name follows convention
+        agent_class_name = agent_name # agent_name.capitalize() + "Agent" # Assumes class name follows convention
         agent_class = getattr(agent_module, agent_class_name)
 
         # Instantiate the agent, potentially passing config if needed
@@ -216,9 +216,8 @@ def main():
     elif args.agent_name:
         run_agent(agents, args.agent_name, config, remaining_args)
     else:
-        show_help(agents)
-
+        # Use BasicChatbotAgent as default
+        run_agent(agents, "BasicChatbotAgent", config, None)
+ 
 if __name__ == "__main__":
     main()
-
-    
