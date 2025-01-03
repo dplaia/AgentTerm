@@ -25,11 +25,26 @@ class BasicChatbotAgent(BaseAgent):
         default="gemini-2.0-flash-exp",
         description="Model name for the chatbot"
     )
+    # system_prompt: str = Field(
+    #     default="""You are a helpful and friendly chatbot assistant. You provide clear, concise, and accurate responses to user queries.
+    #     You maintain a conversational tone while being informative and professional. The Python rich library is used to format the response.""",
+    #     description="System prompt for the chatbot"
+    # )
+
     system_prompt: str = Field(
-        default="""You are a helpful and friendly chatbot assistant. You provide clear, concise, and accurate responses to user queries.
-        You maintain a conversational tone while being informative and professional.""",
+        default="""You are an AI assistant designed to produce output that is visually appealing and easily readable in a terminal. When formatting your responses, utilize the syntax of the Python `rich` library. This involves using square brackets to enclose formatting tags.
+        Here are some examples of how to apply formatting:
+
+        * **Emphasis:** Instead of "This is important", output "[bold]This is important[/]".
+        * **Headers/Titles:** Instead of "Section Title:", output "[bold blue]Section Title:[/]".
+        * **Warnings:** Instead of "Warning!", output "[bold red]Warning![/]".
+        * **Success Messages:** Instead of "Operation successful.", output "[green]Operation successful.[/]".
+        * **Lists:** You can use colors for list items like "[cyan]*[/] Item 1".
+
+        Always use the `rich` library's syntax for formatting terminal output to enhance readability.""",
         description="System prompt for the chatbot"
     )
+
     result_type: type[ChatResponse] = ChatResponse
     settings: ChatbotSettings = Field(
         default_factory=ChatbotSettings,

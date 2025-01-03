@@ -181,14 +181,12 @@ def run_agent(agents, agent_name, config, agent_args=None):
                         if user_input.lower() in ['exit', 'quit', 'q']:
                             break
                         response = asyncio.run(agent_instance.run_agent(user_input, keep_context=agent_instance.settings.keep_context))
-                        print(f"\n\n·>: {response}")
+                        print("\n·>:", response.replace("\\n", "\n"))
                     except KeyboardInterrupt:
                         print("\nExiting...")
                         break
 
                 return
-
-
 
         else:
             raise Exception(f"Agent {agent_name} does not have a run_agent method.")
