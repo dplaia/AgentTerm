@@ -11,6 +11,8 @@ from rich import print
 AGENTS_DIR = "agents"
 CONFIG_FILE = "config.json"
 
+# Small change to see if Github works.
+
 def discover_agents():
     """Finds and imports agent modules from the agents directory."""
     agent_files = glob.glob(os.path.join(AGENTS_DIR, "*.py"))
