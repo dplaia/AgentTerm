@@ -52,7 +52,10 @@
     "agents": [
         {
             "name": "BasicChatbotAgent",
-            "default_llm": "gemini-flash-exp-thinking"
+            "settings": {
+                "keep_context": true,
+                "default_llm": "gemini-flash-exp-thinking"
+            }
         }
     ],
 

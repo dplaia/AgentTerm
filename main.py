@@ -141,16 +141,23 @@ def run_agent(agents, agent_name, config, agent_args=None):
 
     try:
         # Get the agent class dynamically
-        agent_class_name = agent_name # agent_name.capitalize() + "Agent" # Assumes class name follows convention
+        agent_class_name = agent_name
         agent_class = getattr(agent_module, agent_class_name)
 
-        # Instantiate the agent, potentially passing config if needed
-        agent_instance = agent_class()
+        # Get agent settings from config if available
+        agent_config = next((agent for agent in config.get("agents", []) 
+                           if agent["name"] == agent_name), None)
+        
+        # Instantiate the agent with settings from config
+        if agent_config and "settings" in agent_config:
+            agent_instance = agent_class(settings=agent_config["settings"])
+        else:
+            agent_instance = agent_class()
 
         # Use agent's specific argument parser if available
         if hasattr(agent_module, 'main_parser'):
             agent_parser = agent_module.main_parser
-            agent_args = agent_parser.parse_args(agent_args)
+            agent_args = agent_parser.parse_args(agent_args) if agent_args else agent_parser.parse_args([])
         else:
             agent_parser = None
             if agent_args:
@@ -158,19 +165,28 @@ def run_agent(agents, agent_name, config, agent_args=None):
             agent_args = None
 
         if hasattr(agent_instance, 'run_agent'):
-            # Handle any setup needed before calling run_agent
-            # For example, you might need to set attributes based on config or agent_args
-
-            # Execute the run_agent method
-            if agent_parser:
-                result = agent_instance.run_agent(agent_args)
+            # Execute the run_agent method with the appropriate arguments
+            if agent_args and hasattr(agent_args, 'user_input'):
+                result = agent_instance.run_agent(
+                    agent_args.user_input,
+                    keep_context=getattr(agent_args, 'keep_context', None)
+                )
             else:
-                result = agent_instance.run_agent()
+                # Start interactive mode
+                while True:
+                    try:
+                        user_input = input("\nYou: ").strip()
+                        if user_input.lower() in ['exit', 'quit', 'q']:
+                            break
+                        response = agent_instance.run_agent(user_input)
+                        print(f"\nAssistant: {response}")
+                    except KeyboardInterrupt:
+                        print("\nExiting...")
+                        break
+                return
+
         else:
             raise Exception(f"Agent {agent_name} does not have a run_agent method.")
-
-        # Handle the result based on the agent's logic
-        # ...
 
     except Exception as e:
         print(f"Error running agent {agent_name}: {e}")

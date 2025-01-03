@@ -68,9 +68,8 @@ class BaseAgent(ABC, BaseModel):
         )
 
     @abstractmethod
-    def run_agent(self, user_input: str, keep_context: bool = False):
+    def run_agent(self, *args, **kwargs):
         """
-        Abstract method to run the agent with the given user input.
-        Subclasses must implement this method to define the specific agent logic.
+        Abstract method that must be implemented by subclasses to run the agent.
         """
         pass
