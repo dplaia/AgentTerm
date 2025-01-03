@@ -30,7 +30,7 @@ class BasicChatbotAgent(BaseAgent):
         You maintain a conversational tone while being informative and professional.""",
         description="System prompt for the chatbot"
     )
-    result_type: type[str] = str
+    result_type: type[ChatResponse] = ChatResponse
     settings: ChatbotSettings = Field(
         default_factory=ChatbotSettings,
         description="Agent-specific settings"
@@ -56,7 +56,7 @@ class BasicChatbotAgent(BaseAgent):
             data['settings'] = ChatbotSettings(**data['settings'])
         super().__init__(**data)
 
-    def run_agent(self, user_input: str, keep_context: bool | None = None) -> str:
+    async def run_agent(self, user_input: str, keep_context: bool | None = None) -> str:
         """
         Run the chatbot agent with the given user input.
         
@@ -72,8 +72,8 @@ class BasicChatbotAgent(BaseAgent):
         keep_context = keep_context if keep_context is not None else self.settings.keep_context
         
         agent = self.create_agent()
-        response = agent.run(user_input, keep_context=keep_context)
-        return response
+        response = await agent.run(user_input)
+        return response.data.text_response
 
 def add_arguments(parser):
     """

@@ -4,6 +4,8 @@ import importlib
 import argparse
 import json
 import sys
+import asyncio
+from rich import print
 
 # Constants
 AGENTS_DIR = "agents"
@@ -175,15 +177,18 @@ def run_agent(agents, agent_name, config, agent_args=None):
                 # Start interactive mode
                 while True:
                     try:
-                        user_input = input("\nYou: ").strip()
+                        user_input = input("\n·>>>: ").strip()
                         if user_input.lower() in ['exit', 'quit', 'q']:
                             break
-                        response = agent_instance.run_agent(user_input)
-                        print(f"\nAssistant: {response}")
+                        response = asyncio.run(agent_instance.run_agent(user_input, keep_context=agent_instance.settings.keep_context))
+                        print(f"\n\n·>: {response}")
                     except KeyboardInterrupt:
                         print("\nExiting...")
                         break
+
                 return
+
+
 
         else:
             raise Exception(f"Agent {agent_name} does not have a run_agent method.")
