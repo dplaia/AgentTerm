@@ -174,7 +174,7 @@ def run_agent(agents, agent_name, config, agent_args=None):
 
         if hasattr(agent_instance, 'run_agent'):
             # Execute the run_agent method with the appropriate arguments
-            if agent_args and hasattr(agent_args, 'query'):
+            if agent_args and hasattr(agent_args, 'query') and agent_args.query:
                 result = asyncio.run(agent_instance.run_agent(agent_args.query, False))
                 print(f"\n·>: {result}\n")
             else:
