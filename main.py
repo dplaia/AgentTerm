@@ -140,64 +140,6 @@ def show_menu(config, agents):
         elif selected_option == "Exit":
             break
 
-# def run_agent(agents, agent_name, config, agent_args=None):
-#     """Runs the specified agent with the given arguments."""
-#     agent_module = agents.get(agent_name)
-#     if not agent_module:
-#         print(f"Agent '{agent_name}' not found.")
-#         return
-
-#     try:
-#         # Create an instance of the agent
-#         agent_instance = None
-#         for name, value in vars(agent_module).items():
-#             if (
-#                 isinstance(value, type)
-#                 and name != "BaseAgent"
-#                 and getattr(value, "__bases__", None)
-#                 and any("BaseAgent" in str(base) for base in value.__bases__)
-#             ):
-#                 agent_instance = value()
-#                 break
-
-#         if not agent_instance:
-#             print(f"No valid agent class found in {agent_name}")
-#             return
-
-#         # Configure the agent with settings from config.json
-#         if hasattr(agent_instance, "configure"):
-#             agent_instance.configure(config)
-
-#         if hasattr(agent_instance, 'run_agent'):
-#             # Execute the run_agent method with the appropriate arguments
-#             if agent_args and hasattr(agent_args, 'query'):
-#                 result = asyncio.run_coroutine_threadsafe(agent_instance.run_agent(
-#                     agent_args.query,
-#                     keep_context=getattr(agent_args, 'keep_context', None)
-#                 ), None)
-#                 print("\n·>:", result.replace("\\n", "\n"))
-#             else:
-#                 # Start interactive mode
-#                 while True:
-#                     try:
-#                         user_input = input("\n·>>>: ").strip()
-#                         if user_input.lower() in ['exit', 'quit', 'q']:
-#                             break
-#                         result = asyncio.run_coroutine_threadsafe(agent_instance.run_agent(user_input), None)
-#                         print(f"\n·>: {result}\n")
-#                     except KeyboardInterrupt:
-#                         print("\nExiting interactive mode...")
-#                         break
-#                     except Exception as e:
-#                         print(f"Error processing input: {e}")
-#         else:
-#             print(f"Agent '{agent_name}' does not implement run_agent method")
-
-#     except Exception as e:
-#         print(f"Error running agent {agent_name}: {e}")
-
-
-
 def run_agent(agents, agent_name, config, agent_args=None):
     """Runs the specified agent with the given arguments."""
     agent_module = agents.get(agent_name)
