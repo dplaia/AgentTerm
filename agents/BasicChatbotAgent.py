@@ -25,11 +25,6 @@ class BasicChatbotAgent(BaseAgent):
         default="gemini-2.0-flash-exp",
         description="Model name for the chatbot"
     )
-    # system_prompt: str = Field(
-    #     default="""You are a helpful and friendly chatbot assistant. You provide clear, concise, and accurate responses to user queries.
-    #     You maintain a conversational tone while being informative and professional. The Python rich library is used to format the response.""",
-    #     description="System prompt for the chatbot"
-    # )
 
     system_prompt: str = Field(
         default="""You are an AI assistant designed to produce output that is visually appealing and easily readable in a terminal. When formatting your responses, utilize the syntax of the Python `rich` library. This involves using square brackets to enclose formatting tags.
@@ -95,6 +90,11 @@ def add_arguments(parser):
     Adds agent-specific arguments to the argument parser.
     """
     parser.add_argument(
+        "query",
+        nargs="?",
+        help="Input query for the chatbot",
+    )
+    parser.add_argument(
         "-k",
         "--keep-context",
         action="store_true",
@@ -142,12 +142,12 @@ def main(args=None):
 
     agent = BasicChatbotAgent()
     
-    if args.user_input is None:
+    if args.query is None:
         # No input provided, run interactive mode
         run_interactive_chat(agent)
     else:
         # Single input mode
-        result = agent.run_agent(args.user_input, keep_context=args.keep_context)
+        result = agent.run_agent(args.query, keep_context=args.keep_context)
         print(f"\n·>: {result}\n")
 
 if __name__ == "__main__":

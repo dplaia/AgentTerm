@@ -1,11 +1,15 @@
 import os
 import glob
 import importlib
-import argparse
 import json
 import sys
 import asyncio
 from rich import print
+import typer
+from typing import Optional  
+from typing_extensions import Annotated
+
+app = typer.Typer()
 
 # Constants
 AGENTS_DIR = "agents"
@@ -136,6 +140,64 @@ def show_menu(config, agents):
         elif selected_option == "Exit":
             break
 
+# def run_agent(agents, agent_name, config, agent_args=None):
+#     """Runs the specified agent with the given arguments."""
+#     agent_module = agents.get(agent_name)
+#     if not agent_module:
+#         print(f"Agent '{agent_name}' not found.")
+#         return
+
+#     try:
+#         # Create an instance of the agent
+#         agent_instance = None
+#         for name, value in vars(agent_module).items():
+#             if (
+#                 isinstance(value, type)
+#                 and name != "BaseAgent"
+#                 and getattr(value, "__bases__", None)
+#                 and any("BaseAgent" in str(base) for base in value.__bases__)
+#             ):
+#                 agent_instance = value()
+#                 break
+
+#         if not agent_instance:
+#             print(f"No valid agent class found in {agent_name}")
+#             return
+
+#         # Configure the agent with settings from config.json
+#         if hasattr(agent_instance, "configure"):
+#             agent_instance.configure(config)
+
+#         if hasattr(agent_instance, 'run_agent'):
+#             # Execute the run_agent method with the appropriate arguments
+#             if agent_args and hasattr(agent_args, 'query'):
+#                 result = asyncio.run_coroutine_threadsafe(agent_instance.run_agent(
+#                     agent_args.query,
+#                     keep_context=getattr(agent_args, 'keep_context', None)
+#                 ), None)
+#                 print("\n·>:", result.replace("\\n", "\n"))
+#             else:
+#                 # Start interactive mode
+#                 while True:
+#                     try:
+#                         user_input = input("\n·>>>: ").strip()
+#                         if user_input.lower() in ['exit', 'quit', 'q']:
+#                             break
+#                         result = asyncio.run_coroutine_threadsafe(agent_instance.run_agent(user_input), None)
+#                         print(f"\n·>: {result}\n")
+#                     except KeyboardInterrupt:
+#                         print("\nExiting interactive mode...")
+#                         break
+#                     except Exception as e:
+#                         print(f"Error processing input: {e}")
+#         else:
+#             print(f"Agent '{agent_name}' does not implement run_agent method")
+
+#     except Exception as e:
+#         print(f"Error running agent {agent_name}: {e}")
+
+
+
 def run_agent(agents, agent_name, config, agent_args=None):
     """Runs the specified agent with the given arguments."""
     agent_module = agents.get(agent_name)
@@ -170,11 +232,9 @@ def run_agent(agents, agent_name, config, agent_args=None):
 
         if hasattr(agent_instance, 'run_agent'):
             # Execute the run_agent method with the appropriate arguments
-            if agent_args and hasattr(agent_args, 'user_input'):
-                result = agent_instance.run_agent(
-                    agent_args.user_input,
-                    keep_context=getattr(agent_args, 'keep_context', None)
-                )
+            if agent_args and hasattr(agent_args, 'query'):
+                result = asyncio.run(agent_instance.run_agent(agent_args.query, False))
+                print(f"\n·>: {result}\n")
             else:
                 # Start interactive mode
                 while True:
@@ -196,49 +256,33 @@ def run_agent(agents, agent_name, config, agent_args=None):
     except Exception as e:
         print(f"Error running agent {agent_name}: {e}")
 
-def main():
+
+@app.command()
+def main(
+    input_query: Annotated[Optional[str], typer.Argument(help="Input query for the agent")] = None,
+    agent_name: Annotated[Optional[str], typer.Option("--agent","-a", help="Name of the agent")] = None,
+    menu: Annotated[bool, typer.Option(help="Display the main menu")] = False
+):
     """Main function of the agent manager."""
     config = load_config()
     agents = discover_agents()
 
-    parser = argparse.ArgumentParser(
-        description="LLM Agent Manager", add_help=False
-    )
-    parser.add_argument(
-        "agent_name", nargs="?", help="Name of the agent to run"
-    )
-    parser.add_argument(
-        "-m", "--menu", action="store_true", help="Show interactive menu"
-    )
-    parser.add_argument(
-        "-h", "--help", action="store_true", help="Show this help message"
-    )
+    #input_query = "Test: What is 2+2?" # for debugging
 
-    # Peek at the arguments to check for agent-specific help
-    args, remaining_args = parser.parse_known_args()
-
-    if args.help:
-        if args.agent_name:
-            # Handle agent-specific help
-            agent_module = agents.get(args.agent_name)
-            if agent_module:
-                agent_module.main_parser.print_help()
-                sys.exit(0)
-            else:
-                print(f"Agent '{args.agent_name}' not found.")
-                sys.exit(1)
+    if input_query:
+        if menu:
+            show_menu(config, agents)
+        elif agent_name:
+            run_agent(agents, agent_name, config, [input_query])
         else:
-            # Show main program help
-            parser.print_help()
-            show_help(agents)
-            sys.exit(0)
-    elif args.menu:
-        show_menu(config, agents)
-    elif args.agent_name:
-        run_agent(agents, args.agent_name, config, remaining_args)
+            # Use BasicChatbotAgent as default
+            run_agent(agents, "BasicChatbotAgent", config, [input_query])
     else:
-        # Use BasicChatbotAgent as default
-        run_agent(agents, "BasicChatbotAgent", config, None)
- 
+        # If no input query, show menu or run default agent
+        if menu:
+            show_menu(config, agents)
+        else:
+            run_agent(agents, "BasicChatbotAgent", config, None)
+
 if __name__ == "__main__":
     main()
