@@ -190,7 +190,7 @@ def main(
     config = load_config()
     agents = discover_agents()
 
-    input_query = "Test: What is 2+2?" # for debugging
+    #input_query = "Test: What is 2+2?" # for debugging
 
     if input_query:
         if menu:
