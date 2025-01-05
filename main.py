@@ -162,33 +162,14 @@ def run_agent(agents, agent_name, config, agent_args=None):
         else:
             agent_instance = agent_class()
 
-        # Use agent's specific argument parser if available
-        if hasattr(agent_module, 'main_parser'):
-            agent_parser = agent_module.main_parser
-            agent_args = agent_parser.parse_args(agent_args) if agent_args else agent_parser.parse_args([])
-        else:
-            agent_parser = None
-            if agent_args:
-                print("Warning: This agent does not accept arguments.")
-            agent_args = None
-
         if hasattr(agent_instance, 'run_agent'):
             # Execute the run_agent method with the appropriate arguments
-            if agent_args and hasattr(agent_args, 'query') and agent_args.query:
-                result = asyncio.run(agent_instance.run_agent(agent_args.query, False))
+            if agent_args:
+                result = asyncio.run(agent_instance.run_agent(agent_args, False))
                 print(f"\n·>: {result}\n")
             else:
                 # Start interactive mode
-                while True:
-                    try:
-                        user_input = input("\n·>>>: ").strip()
-                        if user_input.lower() in ['exit', 'quit', 'q']:
-                            break
-                        response = asyncio.run(agent_instance.run_agent(user_input, keep_context=agent_instance.settings.keep_context))
-                        print("\n·>:", response.replace("\\n", "\n"))
-                    except KeyboardInterrupt:
-                        print("\nExiting...")
-                        break
+                agent_instance.run_interactive_chat()
 
                 return
 
@@ -209,7 +190,7 @@ def main(
     config = load_config()
     agents = discover_agents()
 
-    #input_query = "Test: What is 2+2?" # for debugging
+    input_query = "Test: What is 2+2?" # for debugging
 
     if input_query:
         if menu:

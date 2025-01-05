@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field, field_validator
 from .base_agent import BaseAgent  # Import the BaseAgent
 import argparse
+import asyncio
+from rich import print
 
 class ChatResponse(BaseModel):
     text_response: str = Field(description="Your response.")
@@ -66,7 +68,7 @@ class BasicChatbotAgent(BaseAgent):
             data['settings'] = ChatbotSettings(**data['settings'])
         super().__init__(**data)
 
-    async def run_agent(self, user_input: str, keep_context: bool | None = None) -> str:
+    async def run_agent(self, user_query: str, keep_context: bool | None = None) -> str:
         """
         Run the chatbot agent with the given user input.
         
@@ -82,73 +84,40 @@ class BasicChatbotAgent(BaseAgent):
         keep_context = keep_context if keep_context is not None else self.settings.keep_context
         
         agent = self.create_agent()
-        response = await agent.run(user_input)
+        response = await agent.run(user_query)
         return response.data.text_response
 
-def add_arguments(parser):
-    """
-    Adds agent-specific arguments to the argument parser.
-    """
-    parser.add_argument(
-        "query",
-        nargs="?",
-        help="Input query for the chatbot",
-    )
-    parser.add_argument(
-        "-k",
-        "--keep-context",
-        action="store_true",
-        help="Keep the conversation context between user inputs (default: from settings).",
-    )
-
-# The main_parser is used by the main program to generate help text for this agent.
-main_parser = argparse.ArgumentParser(
-    description="A basic QA assistant (e.g. chatbot)."
-)
-add_arguments(main_parser)
-
-def run_interactive_chat(agent=None):
-    """
-    Run an interactive chat session with the chatbot.
-    
-    Args:
-        agent: An instance of BasicChatbotAgent. If None, a new instance will be created.
-    """
-    if agent is None:
-        agent = BasicChatbotAgent()
+    async def run_interactive_chat(self):
+        """
+        Run an interactive chat session with the chatbot.
         
-    print("\nWelcome to the Interactive Chatbot!")
-    print("You can start chatting now. Type 'exit' or 'quit' to end the conversation.\n")
-    
-    while True:
-        user_input = input("·>>>: ").strip()
+        Args:
+            agent: An instance of BasicChatbotAgent. If None, a new instance will be created.
+        """
+        print("\nWelcome to the Interactive Chatbot!")
+        print("You can start chatting now. Type 'exit' or 'quit' to end the conversation.\n")
         
-        if user_input.lower() in ['exit', 'quit']:
-            print("\n\nGoodbye! Have a great day!")
-            break
+        while True:
+            user_input = input("·>>>: ").strip()
             
-        if not user_input:
-            continue
-            
-        result = agent.run_agent(user_input, keep_context=True)
-        print(f"\n\n·>: {result}\n")
+            if user_input.lower() in ['exit', 'quit']:
+                print("\n\nGoodbye! Have a great day!")
+                break
+                
+            if not user_input:
+                continue
+                
+            result = await self.run_agent(user_input, keep_context=True)
+            print(f"\n\n·>: {result}\n")
 
-def main(args=None):
+async def main(args=None):
     """
     Main function to run the interactive chatbot.
     """
-    if args is None:
-        args = main_parser.parse_args()
-
     agent = BasicChatbotAgent()
-    
-    if args.query is None:
-        # No input provided, run interactive mode
-        run_interactive_chat(agent)
-    else:
-        # Single input mode
-        result = agent.run_agent(args.query, keep_context=args.keep_context)
-        print(f"\n·>: {result}\n")
+
+    # No input provided, run interactive mode
+    await agent.run_interactive_chat()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
