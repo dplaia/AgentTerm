@@ -19,6 +19,21 @@ class ChatbotSettings(BaseModel):
     )
 
 class BasicChatbotAgent(BaseAgent):
+
+    def __init__(self, **data):
+        """
+        Initialize the BasicChatbotAgent with optional parameters.
+        
+        Args:
+            model_type (str, optional): Model type ('gemini', 'openai', or 'anthropic')
+            model_name (str, optional): Name of the model to use
+            system_prompt (str, optional): Custom system prompt for the chatbot
+            settings (ChatbotSettings, optional): Agent-specific settings
+        """
+        if 'settings' in data and isinstance(data['settings'], dict):
+            data['settings'] = ChatbotSettings(**data['settings'])
+        super().__init__(**data)    
+    
     model_type: str = Field(
         default="gemini",
         description="Model type for the chatbot"
@@ -58,20 +73,6 @@ class BasicChatbotAgent(BaseAgent):
             raise ValueError(f"Invalid model_type: {v}. Must be one of: gemini, openai, anthropic")
         return v
 
-    def __init__(self, **data):
-        """
-        Initialize the BasicChatbotAgent with optional parameters.
-        
-        Args:
-            model_type (str, optional): Model type ('gemini', 'openai', or 'anthropic')
-            model_name (str, optional): Name of the model to use
-            system_prompt (str, optional): Custom system prompt for the chatbot
-            settings (ChatbotSettings, optional): Agent-specific settings
-        """
-        if 'settings' in data and isinstance(data['settings'], dict):
-            data['settings'] = ChatbotSettings(**data['settings'])
-        super().__init__(**data)
-
     def get_messages(self) -> list:
         """
         Get the current message history.
@@ -105,7 +106,9 @@ class BasicChatbotAgent(BaseAgent):
         agent = self.create_agent()
         response = await agent.run(user_query, message_history=message_history)
         self.save_messages(response.all_messages())
-        return response.data.text_response
+        # Convert string literals to actual newlines
+        cleaned_response = eval(repr(response.data.text_response).replace('\\\\n', '\\n')).strip()
+        return cleaned_response
 
     async def run_interactive_chat(self):
         """
@@ -118,20 +121,24 @@ class BasicChatbotAgent(BaseAgent):
         print("You can start chatting now. Type 'exit' or 'quit' to end the conversation.\n")
         
         while True:
-            user_input = input("·>>>: ").strip()
-            
-            if user_input.lower() in ['exit', 'quit']:
-                print("\n\nGoodbye! Have a great day!")
-                break
+            try:
+                user_input = input("·>>>: ").strip()
                 
-            if not user_input:
-                continue
+                if user_input.lower() in ['exit', 'quit']:
+                    print("\n\nGoodbye! Have a great day!")
+                    break
+                    
+                if not user_input:
+                    continue
 
-            message_history = self.get_messages()
-            result = await self.run_agent(user_input, message_history=message_history)
-            
+                message_history = self.get_messages()
+                result = await self.run_agent(user_input, message_history=message_history)
+                
+                print(f"\n\n·>: {result}\n")
 
-            print(f"\n\n·>: {result}\n")
+            except KeyboardInterrupt:
+                print("\nExiting...")
+                break
 
 async def main(args=None):
     """

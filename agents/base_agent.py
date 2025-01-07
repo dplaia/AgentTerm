@@ -11,6 +11,7 @@ class BaseAgent(ABC, BaseModel):
     Abstract base class for pydantic-ai based agents.
     Subclasses must implement the `run_agent` method.
     """
+
     model_type: str = Field(
         default="gemini", description="Model type, either 'gemini', 'openai', or 'anthropic'"
     )

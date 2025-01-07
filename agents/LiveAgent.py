@@ -9,9 +9,43 @@ import pyaudio
 import PIL.Image
 import mss
 import argparse
+from pydantic import BaseModel, Field, field_validator
+from .base_agent import BaseAgent  # Import the BaseAgent
 
 from google import genai
 from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
+
+"""
+## Setup
+
+To install the dependencies for this script, run:
+
+``` 
+pip install google-genai opencv-python pyaudio pillow mss
+```
+
+Before running this script, ensure the `GOOGLE_API_KEY` environment
+variable is set to the api-key you obtained from Google AI Studio.
+
+Important: **Use headphones**. This script uses the system default audio
+input and output, which often won't include echo cancellation. So to prevent
+the model from interrupting itself it is important that you use headphones. 
+
+## Run
+
+To run the script:
+
+```python
+python live_api_starter.py
+```
+
+The script takes a video-mode flag `--mode`, this can be "camera", "screen", or "none".
+The default is "none". To share your screen run:
+
+```python
+python live_api_starter.py --mode screen
+```
+"""
 
 if sys.version_info < (3, 11, 0):
     import taskgroup, exceptiongroup
@@ -113,12 +147,14 @@ class AudioLoop:
         return {"mime_type": mime_type, "data": base64.b64encode(image_bytes).decode()}
 
     async def get_screen(self):
+
         while True:
             frame = await asyncio.to_thread(self._get_screen)
             if frame is None:
                 break
 
             await asyncio.sleep(1.0)
+
             await self.out_queue.put(frame)
 
     async def send_realtime(self):
@@ -205,6 +241,20 @@ class AudioLoop:
             self.audio_stream.close()
             traceback.print_exception(EG)
 
+class LiveAgent(BaseAgent):
+    video_mode: str = Field(
+        default=DEFAULT_MODE,
+        description="pixels to stream from",
+    )
+    def __init__(self, video_mode=DEFAULT_MODE, **kwargs):
+        # First initialize the Pydantic model with the data
+        super().__init__(**kwargs)
+        self.video_mode = video_mode
+        
+    async def run_agent(self):
+        main = AudioLoop(video_mode=self.video_mode)
+        await main.run()
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -215,6 +265,8 @@ if __name__ == "__main__":
         choices=["camera", "screen", "none"],
     )
     args = parser.parse_args()
-    main = AudioLoop(video_mode=args.mode)
-    asyncio.run(main.run())
+    print(args)
+    
 
+    main = LiveAgent(video_mode=args.mode)
+    asyncio.run(main.run_agent())
