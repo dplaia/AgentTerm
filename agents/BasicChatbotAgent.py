@@ -27,6 +27,10 @@ class BasicChatbotAgent(BaseAgent):
         default="gemini-2.0-flash-exp",
         description="Model name for the chatbot"
     )
+    messages: list = Field(
+        default_factory=list,
+        description="Store conversation message history"
+    )
 
     system_prompt: str = Field(
         default="""You are an AI assistant designed to produce output that is visually appealing and easily readable in a terminal. When formatting your responses, utilize the syntax of the Python `rich` library. This involves using square brackets to enclose formatting tags.
@@ -68,23 +72,39 @@ class BasicChatbotAgent(BaseAgent):
             data['settings'] = ChatbotSettings(**data['settings'])
         super().__init__(**data)
 
-    async def run_agent(self, user_query: str, keep_context: bool | None = None) -> str:
+    def get_messages(self) -> list:
+        """
+        Get the current message history.
+        
+        Returns:
+            list: The conversation history
+        """
+        return self.messages
+
+    def save_messages(self, messages: list):
+        """
+        Save the message history.
+        
+        Args:
+            messages (list): The messages to save
+        """
+        self.messages = messages
+
+    async def run_agent(self, user_query: str, message_history: list = None) -> str:
         """
         Run the chatbot agent with the given user input.
         
         Args:
             user_input (str): The user's input text/query
-            keep_context (bool, optional): Whether to maintain conversation context.
-                If None, uses the value from settings.
-            
+            message_history (list, optional): The conversation history
+    
         Returns:
             str: The chatbot's response
         """
-        # Use settings.keep_context if keep_context is not explicitly provided
-        keep_context = keep_context if keep_context is not None else self.settings.keep_context
-        
+
         agent = self.create_agent()
-        response = await agent.run(user_query)
+        response = await agent.run(user_query, message_history=message_history)
+        self.save_messages(response.all_messages())
         return response.data.text_response
 
     async def run_interactive_chat(self):
@@ -106,8 +126,11 @@ class BasicChatbotAgent(BaseAgent):
                 
             if not user_input:
                 continue
-                
-            result = await self.run_agent(user_input, keep_context=True)
+
+            message_history = self.get_messages()
+            result = await self.run_agent(user_input, message_history=message_history)
+            
+
             print(f"\n\n·>: {result}\n")
 
 async def main(args=None):

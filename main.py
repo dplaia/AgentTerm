@@ -169,7 +169,7 @@ def run_agent(agents, agent_name, config, agent_args=None):
                 print(f"\n·>: {result}\n")
             else:
                 # Start interactive mode
-                agent_instance.run_interactive_chat()
+                asyncio.run(agent_instance.run_interactive_chat())
 
                 return
 
