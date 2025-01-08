@@ -15,44 +15,6 @@ from .base_agent import BaseAgent  # Import the BaseAgent
 from google import genai
 from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
 
-"""
-## Setup
-
-To install the dependencies for this script, run:
-
-``` 
-pip install google-genai opencv-python pyaudio pillow mss
-```
-
-Before running this script, ensure the `GOOGLE_API_KEY` environment
-variable is set to the api-key you obtained from Google AI Studio.
-
-Important: **Use headphones**. This script uses the system default audio
-input and output, which often won't include echo cancellation. So to prevent
-the model from interrupting itself it is important that you use headphones. 
-
-## Run
-
-To run the script:
-
-```python
-python live_api_starter.py
-```
-
-The script takes a video-mode flag `--mode`, this can be "camera", "screen", or "none".
-The default is "none". To share your screen run:
-
-```python
-python live_api_starter.py --mode screen
-```
-"""
-
-if sys.version_info < (3, 11, 0):
-    import taskgroup, exceptiongroup
-
-    asyncio.TaskGroup = taskgroup.TaskGroup
-    asyncio.ExceptionGroup = exceptiongroup.ExceptionGroup
-
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 SEND_SAMPLE_RATE = 16000
@@ -72,8 +34,8 @@ CONFIG = {
 pya = pyaudio.PyAudio()
 
 class AudioLoop:
-    def __init__(self, video_mode=DEFAULT_MODE):
-        self.video_mode = video_mode
+    def __init__(self, input_mode=DEFAULT_MODE):
+        self.input_mode = input_mode
         self.audio_in_queue = None
         self.out_queue = None
         self.session = None
@@ -224,9 +186,9 @@ class AudioLoop:
                 send_text_task = tg.create_task(self.send_text())
                 tg.create_task(self.send_realtime())
                 tg.create_task(self.listen_audio())
-                if self.video_mode == "camera":
+                if self.input_mode == "camera":
                     tg.create_task(self.get_frames())
-                elif self.video_mode == "screen":
+                elif self.input_mode == "screen":
                     tg.create_task(self.get_screen())
                 
                 tg.create_task(self.receive_audio())
@@ -246,13 +208,13 @@ class LiveAgent(BaseAgent):
         default=DEFAULT_MODE,
         description="pixels to stream from",
     )
-    def __init__(self, video_mode=DEFAULT_MODE, **kwargs):
+    def __init__(self, input_mode=DEFAULT_MODE, **kwargs):
         # First initialize the Pydantic model with the data
         super().__init__(**kwargs)
-        self.video_mode = video_mode
+        self.input_mode = input_mode
         
     async def run_agent(self):
-        main = AudioLoop(video_mode=self.video_mode)
+        main = AudioLoop(input_mode=self.input_mode)
         await main.run()
 
 if __name__ == "__main__":
@@ -265,8 +227,6 @@ if __name__ == "__main__":
         choices=["camera", "screen", "none"],
     )
     args = parser.parse_args()
-    print(args)
     
-
     main = LiveAgent(video_mode=args.mode)
     asyncio.run(main.run_agent())
