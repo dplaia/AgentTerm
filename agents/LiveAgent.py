@@ -204,7 +204,7 @@ class AudioLoop:
             traceback.print_exception(EG)
 
 class LiveAgent(BaseAgent):
-    video_mode: str = Field(
+    input_mode: str = Field(
         default=DEFAULT_MODE,
         description="pixels to stream from",
     )
@@ -228,5 +228,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     
-    main = LiveAgent(video_mode=args.mode)
+    main = LiveAgent(input_mode=args.mode)
     asyncio.run(main.run_agent())
