@@ -21,7 +21,7 @@ SEND_SAMPLE_RATE = 16000
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE = 1024
 MODEL = "models/gemini-2.0-flash-exp"
-DEFAULT_MODE = "none" # "camera"
+DEFAULT_MODE = "none"
 
 client = genai.Client(http_options={"api_version": "v1alpha"})
 
@@ -116,7 +116,6 @@ class AudioLoop:
                 break
 
             await asyncio.sleep(1.0)
-
             await self.out_queue.put(frame)
 
     async def send_realtime(self):
@@ -173,12 +172,21 @@ class AudioLoop:
             bytestream = await self.audio_in_queue.get()
             await asyncio.to_thread(stream.write, bytestream)
 
+    async def insert_frame(self, frame):
+        """
+        Insert an external frame into the output queue.
+        
+        Args:
+            frame (dict): A dictionary containing 'mime_type' and 'data' keys.
+                         The frame should be in the same format as _get_screen output.
+        """
+        await self.out_queue.put(frame)
+
     async def run(self):
         try:
-            async with (
-                client.aio.live.connect(model=MODEL, config=CONFIG) as session,
-                asyncio.TaskGroup() as tg,
-            ):
+            async with (client.aio.live.connect(model=MODEL, config=CONFIG) as session,
+                        asyncio.TaskGroup() as tg):
+
                 self.session = session
                 self.audio_in_queue = asyncio.Queue()
                 self.out_queue = asyncio.Queue(maxsize=5)
@@ -206,15 +214,24 @@ class AudioLoop:
 class LiveAgent(BaseAgent):
     input_mode: str = Field(
         default=DEFAULT_MODE,
-        description="pixels to stream from",
-    )
+        description="pixels to stream from",)
+    
+    frame_queue: asyncio.Queue = Field(
+        default_factory=asyncio.Queue,
+        description="Queue for external frame insertion",)
+        
     def __init__(self, input_mode=DEFAULT_MODE, **kwargs):
         # First initialize the Pydantic model with the data
         super().__init__(**kwargs)
         self.input_mode = input_mode
         
+    async def insert_frame(self, frame):
+        """Insert a frame into the agent's frame queue"""
+        await self.frame_queue.put(frame)
+        
     async def run_agent(self):
         main = AudioLoop(input_mode=self.input_mode)
+        main.out_queue = self.frame_queue
         await main.run()
 
 if __name__ == "__main__":

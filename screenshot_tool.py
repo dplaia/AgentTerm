@@ -1,9 +1,13 @@
 import tkinter as tk
-from PIL import ImageGrab
+from PIL import ImageGrab, Image
 import pyautogui
 import os
 import time
+import asyncio
+import base64
+import io
 from threading import Thread
+from agents.LiveAgent import LiveAgent
 
 # Create screenshots directory if it doesn't exist
 if not os.path.exists("screenshots"):
@@ -15,7 +19,9 @@ class ContinuousCapture:
         self.root = None
         self.capture_thread = None
         self.rect_coords = (0, 0, 400, 300)  # Default size
-
+        self.live_agent = LiveAgent(input_mode="none")
+        self.event_loop = asyncio.new_event_loop()
+        
     def start_capture(self):
         self.root = tk.Tk()
         self.root.title("Continuous Capture")
@@ -44,14 +50,78 @@ class ContinuousCapture:
         # Bind window resize event
         self.root.bind("<Configure>", self.on_resize)
         
-        # Start capture thread
+        # Start capture thread and agent thread
         self.running = True
         self.capture_thread = Thread(target=self.capture_loop)
         self.capture_thread.daemon = True
         self.capture_thread.start()
         
+        # Start LiveAgent in a separate thread
+        self.agent_thread = Thread(target=self._run_agent)
+        self.agent_thread.daemon = True
+        self.agent_thread.start()
+        
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.mainloop()
+
+    def _run_agent(self):
+        asyncio.set_event_loop(self.event_loop)
+        self.event_loop.run_until_complete(self.live_agent.run_agent())
+
+    def _prepare_frame(self, screenshot):
+        """Convert PIL Image to base64 encoded frame for LiveAgent"""
+        image_io = io.BytesIO()
+        screenshot.save(image_io, format="JPEG")
+        image_io.seek(0)
+        image_bytes = image_io.read()
+        return {
+            "mime_type": "image/jpeg",
+            "data": base64.b64encode(image_bytes).decode()
+        }
+
+    def capture_loop(self):
+        while self.running:
+            try:
+                # Get the window coordinates in screen space
+                x1 = self.root.winfo_rootx()
+                y1 = self.root.winfo_rooty()
+                x2 = x1 + self.root.winfo_width()
+                y2 = y1 + self.root.winfo_height()
+                
+                # Adjust coordinates to exclude window decorations
+                border_width = 8
+                title_bar_height = 10
+                
+                x1 += border_width
+                y1 += title_bar_height
+                x2 -= border_width
+                y2 -= border_width
+                
+                # Ensure valid capture area
+                if x2 > x1 and y2 > y1:
+                    screenshot = ImageGrab.grab(bbox=(x1, y1, x2, y2))
+                    frame = self._prepare_frame(screenshot)
+                    
+                    # Send frame to LiveAgent
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.live_agent.insert_frame(frame),
+                        self.event_loop
+                    )
+                    future.result()  # Wait for the frame to be inserted
+                
+                time.sleep(1)
+            except Exception as e:
+                print(f"Error during capture: {e}")
+                time.sleep(1)
+
+    def on_closing(self):
+        self.running = False
+        if self.capture_thread:
+            self.capture_thread.join()
+        if hasattr(self, 'agent_thread'):
+            self.event_loop.call_soon_threadsafe(self.event_loop.stop)
+            self.agent_thread.join()
+        self.root.destroy()
 
     def on_resize(self, event):
         # Only update if it's a window resize event (not other configure events)
@@ -67,42 +137,6 @@ class ContinuousCapture:
                 self.root.winfo_rootx() + event.width,
                 self.root.winfo_rooty() + event.height
             )
-
-    def capture_loop(self):
-        counter = 0
-        while self.running:
-            try:
-                # Get the window coordinates in screen space
-                x1 = self.root.winfo_rootx()
-                y1 = self.root.winfo_rooty()
-                x2 = x1 + self.root.winfo_width()
-                y2 = y1 + self.root.winfo_height()
-                
-                # Adjust coordinates to exclude window decorations
-                border_width = 8
-                title_bar_height = 10  # Standard Windows title bar height
-                
-                # Adjust to capture only the inside of the blue rectangle
-                x1 += border_width
-                y1 += title_bar_height  # Only add title bar height, not border
-                x2 -= border_width
-                y2 -= border_width
-                
-                # Ensure valid capture area
-                if x2 > x1 and y2 > y1:
-                    screenshot = ImageGrab.grab(bbox=(x1, y1, x2, y2))
-                    screenshot.save(f"screenshots/capture_{counter}.png")
-                    counter += 1
-                time.sleep(1)
-            except Exception as e:
-                print(f"Error during capture: {e}")
-                time.sleep(1)
-
-    def on_closing(self):
-        self.running = False
-        if self.capture_thread:
-            self.capture_thread.join()
-        self.root.destroy()
 
 class ScreenshotTool:
     def __init__(self):
