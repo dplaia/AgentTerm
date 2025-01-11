@@ -5,6 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pydantic-ai>=0.0.16",
     "pydantic>=2.10.4",
+    "pillow>=11.1.0",
+    "pyautogui>=0.9.54",
+    "opencv-python>=4.10.0.84",
+    "pyaudio>=0.2.14",
+    "mss>=10.0.0",
+    "openai>=0.27.10",
+    "pydantic-ai>=0.0.0",
 ]
