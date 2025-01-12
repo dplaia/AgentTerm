@@ -9,7 +9,7 @@ import pyaudio
 import PIL.Image
 import mss
 import argparse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from .base_agent import BaseAgent  # Import the BaseAgent
 
 from google import genai
@@ -212,6 +212,8 @@ class AudioLoop:
             traceback.print_exception(EG)
 
 class LiveAgent(BaseAgent):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     input_mode: str = Field(
         default=DEFAULT_MODE,
         description="pixels to stream from",)
