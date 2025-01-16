@@ -2,7 +2,6 @@ import os
 import glob
 import importlib
 import json
-import sys
 import asyncio
 from rich import print
 import typer

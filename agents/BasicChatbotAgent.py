@@ -125,9 +125,16 @@ class BasicChatbotAgent(BaseAgent):
                 user_input = input("·>>>: ").strip()
                 
                 if user_input.lower() in ['exit', 'quit']:
-                    print("\n\nGoodbye! Have a great day!")
+                    print("\n\nConversation ended.")
                     break
-                    
+                
+                if user_input.lower() in ['reset', 'clear']:
+                    # clear terminal
+                    print("\033c")
+                    # Clear the message history
+                    self.save_messages([])
+                    continue
+
                 if not user_input:
                     continue
 
