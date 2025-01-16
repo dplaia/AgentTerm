@@ -1,5 +1,5 @@
 # Navigate to the project directory
-cd /home/dev/Projects/AgentTerm
+cd /home/dplaia/Projekte/AgentTerm
 
 # Activate the virtual environment (adjust the path as needed)
 #source .venv/bin/activate
