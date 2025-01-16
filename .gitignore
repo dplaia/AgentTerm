@@ -176,3 +176,4 @@ uv.lock
 
 *.png
 OAI_CONFIG_LIST
+run_agent.sh
