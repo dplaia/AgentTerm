@@ -3,6 +3,8 @@ from .base_agent import BaseAgent  # Import the BaseAgent
 import argparse
 import asyncio
 from rich import print
+from prompt_toolkit import PromptSession
+from prompt_toolkit.styles import Style
 
 class ChatResponse(BaseModel):
     text_response: str = Field(description="Your response.")
@@ -91,38 +93,51 @@ class BasicChatbotAgent(BaseAgent):
         """
         self.messages = messages
 
-    async def run_agent(self, user_query: str, message_history: list = None) -> str:
+    def run_agent(self, user_query: str, message_history: list = None) -> str:
         """
         Run the chatbot agent with the given user input.
         
         Args:
             user_input (str): The user's input text/query
             message_history (list, optional): The conversation history
-    
+
         Returns:
             str: The chatbot's response
         """
 
         agent = self.create_agent()
-        response = await agent.run(user_query, message_history=message_history)
-        self.save_messages(response.all_messages())
-        # Convert string literals to actual newlines
-        cleaned_response = eval(repr(response.data.text_response).replace('\\\\n', '\\n')).strip()
-        return cleaned_response
+        # Use asyncio.get_event_loop().run_until_complete to run the async function
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            response = loop.run_until_complete(agent.run(user_query, message_history=message_history))
+            self.save_messages(response.all_messages())
+            # Convert string literals to actual newlines
+            cleaned_response = eval(repr(response.data.text_response).replace('\\\\n', '\\n')).strip()
+            return cleaned_response
+        finally:
+            loop.close()
 
-    async def run_interactive_chat(self):
+    def run_interactive_chat(self):
         """
         Run an interactive chat session with the chatbot.
         
         Args:
             agent: An instance of BasicChatbotAgent. If None, a new instance will be created.
         """
+        # Create a prompt session with custom style
+        style = Style.from_dict({
+            'prompt': '#00aa00 bold',
+        })
+        session = PromptSession(style=style)
+        
         print("\nWelcome to the Interactive Chatbot!")
         print("You can start chatting now. Type 'exit' or 'quit' to end the conversation.\n")
         
         while True:
             try:
-                user_input = input("·>>>: ").strip()
+                # Use prompt_toolkit's prompt with custom formatting
+                user_input = session.prompt("·>>>: ").strip()
                 
                 if user_input.lower() in ['exit', 'quit']:
                     print("\n\nConversation ended.")
@@ -135,26 +150,22 @@ class BasicChatbotAgent(BaseAgent):
                     self.save_messages([])
                     continue
 
-                if not user_input:
-                    continue
-
-                message_history = self.get_messages()
-                result = await self.run_agent(user_input, message_history=message_history)
+                response = self.run_agent(user_input)
+                print(f"\n{response}\n")
                 
-                print(f"\n\n·>: {result}\n")
-
             except KeyboardInterrupt:
-                print("\nExiting...")
+                continue
+            except EOFError:
                 break
 
-async def main(args=None):
+def main(args=None):
     """
     Main function to run the interactive chatbot.
     """
     agent = BasicChatbotAgent()
 
     # No input provided, run interactive mode
-    await agent.run_interactive_chat()
+    agent.run_interactive_chat()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

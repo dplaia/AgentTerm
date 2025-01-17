@@ -19,5 +19,5 @@ dependencies = [
     "fastapi[standard]>=0.115.6",
     "trace-opt>=0.1.3.3",
     "ipykernel>=6.29.5",
-    "autogen>=0.7.0",
+    "prompt-toolkit>=3.0.48",
 ]

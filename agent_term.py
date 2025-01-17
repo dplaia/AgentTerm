@@ -164,12 +164,11 @@ def run_agent(agents, agent_name, config, agent_args=None):
         if hasattr(agent_instance, 'run_agent'):
             # Execute the run_agent method with the appropriate arguments
             if agent_args:
-                result = asyncio.run(agent_instance.run_agent(agent_args, False))
+                result = agent_instance.run_agent(agent_args[0])
                 print(f"\n·>: {result}\n")
             else:
                 # Start interactive mode
-                asyncio.run(agent_instance.run_interactive_chat())
-
+                agent_instance.run_interactive_chat()
                 return
 
         else:
