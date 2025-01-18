@@ -106,6 +106,7 @@ class BasicChatbotAgent(BaseAgent):
             # Save the message history
             if save_message_history:
                 self.save_messages(response.all_messages())
+                #print(response.all_messages())
             # Convert string literals to actual newlines
             cleaned_response = eval(repr(response.data.text_response).replace('\\\\n', '\\n')).strip()
             return cleaned_response

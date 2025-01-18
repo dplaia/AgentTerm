@@ -28,7 +28,8 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
-app = FastAPI(dependencies=[Depends(get_query_token)], lifespan=lifespan)
+#app = FastAPI(dependencies=[Depends(get_query_token)], lifespan=lifespan)
+app = FastAPI(lifespan=lifespan)
 
 app.include_router(users.router)
 app.include_router(items.router)
@@ -36,7 +37,7 @@ app.include_router(
     admin.router,
     prefix="/admin",
     tags=["admin"],
-    dependencies=[Depends(get_token_header)],
+    #dependencies=[Depends(get_token_header)],
     responses={418: {"description": "I'm a teapot"}},
 )
 # Include the chatbot router
