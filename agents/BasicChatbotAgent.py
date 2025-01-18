@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from .base_agent import BaseAgent  # Import the BaseAgent
 
-
 class ChatResponse(BaseModel):
     text_response: str = Field(description="Your response.")
 
@@ -110,14 +109,3 @@ class BasicChatbotAgent(BaseAgent):
         except Exception as e:
             raise e
 
-def main(args=None):
-    """
-    Main function to run the interactive chatbot.
-    """
-    agent = BasicChatbotAgent()
-
-    # No input provided, run interactive mode
-    agent.run_interactive_chat()
-
-if __name__ == "__main__":
-    main()

@@ -2,20 +2,20 @@ import os
 import glob
 import importlib
 import json
-import asyncio
+import argparse
 from rich import print
-import typer
-from typing import Optional  
+from typing import Optional
 from typing_extensions import Annotated
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
-app = typer.Typer()
+from prompt_toolkit.application import create_app_session
+from prompt_toolkit.application.current import get_app
+import asyncio
+from agents.BasicChatbotAgent import BasicChatbotAgent
 
 # Constants
 AGENTS_DIR = "agents"
 CONFIG_FILE = "config.json"
-
-# Small change to see if Github works.
 
 def discover_agents():
     """Finds and imports agent modules from the agents directory."""
@@ -130,8 +130,8 @@ def show_menu(config, agents):
             run_selected_agent = input(
                 f"Run agent {selected_agent_name} now? (y/n): "
             )
-            if run_selected_agent.lower() == "y":
-                run_agent(agents, selected_agent_name, config)
+            # if run_selected_agent.lower() == "y":
+            #     asyncio.run(run_agent(agents, selected_agent_name, config))
         elif selected_option.startswith("Change"):
             setting_name = selected_option.split(" ", 1)[1]
             change_setting(config, setting_name)
@@ -140,7 +140,7 @@ def show_menu(config, agents):
         elif selected_option == "Exit":
             break
 
-def run_agent(agents, agent_name, config, agent_args=None):
+async def run_agent(agents, agent_name, config, agent_args=None):
     """Runs the specified agent with the given arguments."""
     agent_module = agents.get(agent_name)
     if not agent_module:
@@ -153,98 +153,132 @@ def run_agent(agents, agent_name, config, agent_args=None):
         agent_class = getattr(agent_module, agent_class_name)
 
         # Get agent settings from config if available
-        agent_config = next((agent for agent in config.get("agents", []) 
-                           if agent["name"] == agent_name), None)
-        
+        agent_config = next(
+            (
+                agent
+                for agent in config.get("agents", [])
+                if agent["name"] == agent_name
+            ),
+            None,
+        )
+
         # Instantiate the agent with settings from config
         if agent_config and "settings" in agent_config:
             agent_instance = agent_class(settings=agent_config["settings"])
         else:
             agent_instance = agent_class()
 
-        if hasattr(agent_instance, 'run_agent'):
-            # Execute the run_agent method with the appropriate arguments
+        if hasattr(agent_instance, "run_agent"):
             if agent_args:
-                result = agent_instance.run_agent(agent_args[0])
+                result = await agent_instance.run_agent(agent_args[0])
                 print(f"\n·>: {result}\n")
             else:
                 # Start interactive mode
-                agent_instance.run_interactive_chat()
-                return
-
+                await run_interactive_chat(agent_instance)
         else:
-            raise Exception(f"Agent {agent_name} does not have a run_agent method.")
+            raise Exception(
+                f"Agent {agent_name} does not have a run_agent method."
+            )
 
     except Exception as e:
         print(f"Error running agent {agent_name}: {e}")
 
-
-def run_interactive_chat():
+async def run_interactive_chat(agent=None):
     """
     Run an interactive chat session with the chatbot.
-    
+
     Args:
         agent: An instance of BasicChatbotAgent. If None, a new instance will be created.
     """
     # Create a prompt session with custom style
-    style = Style.from_dict({
-        'prompt': '#00aa00 bold',
-    })
+    style = Style.from_dict(
+        {
+            "prompt": "#00aa00 bold",
+        }
+    )
     session = PromptSession(style=style)
-    
+
     print("\nWelcome to the Interactive Chatbot!")
-    print("You can start chatting now. Type 'exit' or 'quit' to end the conversation.\n")
-    
+    print(
+        "You can start chatting now. Type 'exit' or 'quit' to end the conversation.\n"
+    )
+
+    if agent is None:
+        # Create a default agent if none was provided
+        
+        agent = BasicChatbotAgent()
+
     while True:
         try:
-            # Use prompt_toolkit's prompt with custom formatting
-            user_input = session.prompt("·>>>: ").strip()
-            
-            if user_input.lower() in ['exit', 'quit']:
+            # Use prompt_toolkit's async prompt
+            user_input = await session.prompt_async("·>>>: ")
+            user_input = user_input.strip()
+
+            if user_input.lower() in ["exit", "quit"]:
                 print("\n\nConversation ended.")
                 break
-            
-            if user_input.lower() in ['reset', 'clear']:
+
+            if user_input.lower() in ["reset", "clear"]:
                 # clear terminal
                 print("\033c")
                 # Clear the message history
-                self.save_messages([])
+                if agent:
+                    agent.save_messages([])
                 continue
 
-            response = self.run_agent(user_input)
+            response = await agent.run_agent(user_input)
             print(f"\n{response}\n")
-            
+
         except KeyboardInterrupt:
             continue
         except EOFError:
             break
 
-@app.command()
-def main(
-    input_query: Annotated[Optional[str], typer.Argument(help="Input query for the agent")] = None,
-    agent_name: Annotated[Optional[str], typer.Option("--agent","-a", help="Name of the agent")] = None,
-    menu: Annotated[bool, typer.Option(help="Display the main menu")] = False
-):
+def main():
     """Main function of the agent manager."""
-    config = load_config()
-    agents = discover_agents()
+    parser = argparse.ArgumentParser(description="Agent Terminal")
+    parser.add_argument("input_query", nargs="?", help="Input query for the agent")
+    parser.add_argument("--agent", "-a", help="Name of the agent")
+    parser.add_argument("--menu", action="store_true", help="Display the main menu")
+    
+    args = parser.parse_args()
 
-    #input_query = "Test: What is 2+2?" # for debugging
+    async def async_main():
+        try:
+            config = load_config()
+            agents = discover_agents()
 
-    if input_query:
-        if menu:
-            show_menu(config, agents)
-        elif agent_name:
-            run_agent(agents, agent_name, config, [input_query])
-        else:
-            # Use BasicChatbotAgent as default
-            run_agent(agents, "BasicChatbotAgent", config, [input_query])
-    else:
-        # If no input query, show menu or run default agent
-        if menu:
-            show_menu(config, agents)
-        else:
-            run_agent(agents, "BasicChatbotAgent", config, None)
+            if not agents:
+                print("[red]No agents found in the agents directory.[/red]")
+                return
+
+            if args.menu:
+                show_menu(config, agents)
+                return
+
+            if args.agent:
+                await run_agent(agents, args.agent, config, args.input_query)
+            elif args.input_query:
+                await run_agent(agents, "BasicChatbotAgent", config, args.input_query)
+            else:
+                # Run interactive chat when no arguments are provided
+                with create_app_session():
+                    await run_interactive_chat()
+
+        except Exception as e:
+            print(f"[red]Error: {str(e)}[/red]")
+
+    # Get the current event loop or create a new one
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    try:
+        loop.run_until_complete(async_main())
+    finally:
+        loop.close()
 
 if __name__ == "__main__":
     main()
