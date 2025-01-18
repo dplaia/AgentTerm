@@ -1,10 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from .base_agent import BaseAgent  # Import the BaseAgent
-import argparse
-import asyncio
-from rich import print
-from prompt_toolkit import PromptSession
-from prompt_toolkit.styles import Style
+
 
 class ChatResponse(BaseModel):
     text_response: str = Field(description="Your response.")
@@ -93,7 +89,7 @@ class BasicChatbotAgent(BaseAgent):
         """
         self.messages = messages
 
-    def run_agent(self, user_query: str, message_history: list = None) -> str:
+    async def run_agent(self, user_query: str, message_history: list = None) -> str:
         """
         Run the chatbot agent with the given user input.
         
@@ -104,59 +100,15 @@ class BasicChatbotAgent(BaseAgent):
         Returns:
             str: The chatbot's response
         """
-
         agent = self.create_agent()
-        # Use asyncio.get_event_loop().run_until_complete to run the async function
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
-            response = loop.run_until_complete(agent.run(user_query, message_history=message_history))
+            response = await agent.run(user_query, message_history=message_history)
             self.save_messages(response.all_messages())
             # Convert string literals to actual newlines
             cleaned_response = eval(repr(response.data.text_response).replace('\\\\n', '\\n')).strip()
             return cleaned_response
-        finally:
-            loop.close()
-
-    def run_interactive_chat(self):
-        """
-        Run an interactive chat session with the chatbot.
-        
-        Args:
-            agent: An instance of BasicChatbotAgent. If None, a new instance will be created.
-        """
-        # Create a prompt session with custom style
-        style = Style.from_dict({
-            'prompt': '#00aa00 bold',
-        })
-        session = PromptSession(style=style)
-        
-        print("\nWelcome to the Interactive Chatbot!")
-        print("You can start chatting now. Type 'exit' or 'quit' to end the conversation.\n")
-        
-        while True:
-            try:
-                # Use prompt_toolkit's prompt with custom formatting
-                user_input = session.prompt("·>>>: ").strip()
-                
-                if user_input.lower() in ['exit', 'quit']:
-                    print("\n\nConversation ended.")
-                    break
-                
-                if user_input.lower() in ['reset', 'clear']:
-                    # clear terminal
-                    print("\033c")
-                    # Clear the message history
-                    self.save_messages([])
-                    continue
-
-                response = self.run_agent(user_input)
-                print(f"\n{response}\n")
-                
-            except KeyboardInterrupt:
-                continue
-            except EOFError:
-                break
+        except Exception as e:
+            raise e
 
 def main(args=None):
     """

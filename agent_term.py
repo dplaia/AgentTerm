@@ -7,7 +7,8 @@ from rich import print
 import typer
 from typing import Optional  
 from typing_extensions import Annotated
-
+from prompt_toolkit import PromptSession
+from prompt_toolkit.styles import Style
 app = typer.Typer()
 
 # Constants
@@ -177,6 +178,46 @@ def run_agent(agents, agent_name, config, agent_args=None):
     except Exception as e:
         print(f"Error running agent {agent_name}: {e}")
 
+
+def run_interactive_chat():
+    """
+    Run an interactive chat session with the chatbot.
+    
+    Args:
+        agent: An instance of BasicChatbotAgent. If None, a new instance will be created.
+    """
+    # Create a prompt session with custom style
+    style = Style.from_dict({
+        'prompt': '#00aa00 bold',
+    })
+    session = PromptSession(style=style)
+    
+    print("\nWelcome to the Interactive Chatbot!")
+    print("You can start chatting now. Type 'exit' or 'quit' to end the conversation.\n")
+    
+    while True:
+        try:
+            # Use prompt_toolkit's prompt with custom formatting
+            user_input = session.prompt("·>>>: ").strip()
+            
+            if user_input.lower() in ['exit', 'quit']:
+                print("\n\nConversation ended.")
+                break
+            
+            if user_input.lower() in ['reset', 'clear']:
+                # clear terminal
+                print("\033c")
+                # Clear the message history
+                self.save_messages([])
+                continue
+
+            response = self.run_agent(user_input)
+            print(f"\n{response}\n")
+            
+        except KeyboardInterrupt:
+            continue
+        except EOFError:
+            break
 
 @app.command()
 def main(
