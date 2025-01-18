@@ -88,24 +88,26 @@ class BasicChatbotAgent(BaseAgent):
         """
         self.messages = messages
 
-    async def run_agent(self, user_query: str, message_history: list = None) -> str:
+    async def run_agent(self, user_query: str, save_message_history: bool = True) -> str:
         """
         Run the chatbot agent with the given user input.
         
         Args:
             user_input (str): The user's input text/query
-            message_history (list, optional): The conversation history
+            message_history (bool, optional): Whether to use message history (default: True)
 
         Returns:
             str: The chatbot's response
         """
         agent = self.create_agent()
         try:
-            response = await agent.run(user_query, message_history=message_history)
-            self.save_messages(response.all_messages())
+            response = await agent.run(user_query, message_history=self.messages if save_message_history else [])
+
+            # Save the message history
+            if save_message_history:
+                self.save_messages(response.all_messages())
             # Convert string literals to actual newlines
             cleaned_response = eval(repr(response.data.text_response).replace('\\\\n', '\\n')).strip()
             return cleaned_response
         except Exception as e:
             raise e
-
