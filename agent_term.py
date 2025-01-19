@@ -11,10 +11,10 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.application import create_app_session
 from prompt_toolkit.application.current import get_app
 import asyncio
-from agents.BasicChatbotAgent import BasicChatbotAgent
+from app.agents.BasicChatbotAgent import BasicChatbotAgent
 
 # Constants
-AGENTS_DIR = "agents"
+AGENTS_DIR = "./app/agents"
 CONFIG_FILE = "config.json"
 
 def discover_agents():

@@ -7,7 +7,7 @@ from datetime import datetime
 import asyncio
 
 # Import your BasicChatbotAgent from the agents folder
-from agents.BasicChatbotAgent import BasicChatbotAgent
+from app.agents.BasicChatbotAgent import BasicChatbotAgent
 
 router = APIRouter()
 
@@ -20,6 +20,9 @@ INACTIVITY_THRESHOLD = 3600
 class ChatRequest(BaseModel):
     user_input: str
     client_id: str = None
+    model_type: str = "gemini"
+    model_name: str = "gemini-2.0-flash-exp"
+    system_prompt: str = None
 
 async def cleanup_inactive_instances():
     """
@@ -63,7 +66,16 @@ async def chat(request: ChatRequest):
     
     # Create new chatbot instance if needed
     if request.client_id not in chatbot_instances:
-        chatbot_instances[request.client_id] = (BasicChatbotAgent(), time.time())
+        # Only pass non-None parameters to avoid overwriting defaults
+        params = {}
+        if request.model_type is not None:
+            params['model_type'] = request.model_type
+        if request.model_name is not None:
+            params['model_name'] = request.model_name
+        if request.system_prompt is not None:
+            params['system_prompt'] = request.system_prompt
+            
+        chatbot_instances[request.client_id] = (BasicChatbotAgent(**params), time.time())
     
     # Get the client's chatbot instance and update activity time
     chatbot, _ = chatbot_instances[request.client_id]

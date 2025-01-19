@@ -9,7 +9,7 @@ from pydantic_ai.models.anthropic import AnthropicModel
 class BaseAgent(ABC, BaseModel):
     """
     Abstract base class for pydantic-ai based agents.
-    Subclasses must implement the `run_agent` method.
+    Subclasses must implement the `run_agent`, `get_api_key`, and `get_model` methods.
     """
 
     model_type: str = Field(
@@ -28,36 +28,18 @@ class BaseAgent(ABC, BaseModel):
         default=None, description="API key environment variable name"
     )
 
+    @abstractmethod
     def get_api_key(self):
-        """Retrieves the API key from the environment variable."""
-        if self.api_key_env_var is None:
-            # Auto-select API key environment variable based on model type
-            env_var_mapping = {
-                "gemini": "GEMINI_API_KEY",
-                "openai": "OPENAI_API_KEY",
-                "anthropic": "ANTHROPIC_API_KEY"
-            }
-            self.api_key_env_var = env_var_mapping.get(self.model_type)
-            if not self.api_key_env_var:
-                raise ValueError(f"Unsupported model type for API key selection: {self.model_type}")
+        """Retrieves the API key. Must be implemented by subclasses."""
+        pass
 
-        api_key = os.getenv(self.api_key_env_var)
-        if not api_key:
-            raise ValueError(f"{self.api_key_env_var} environment variable not set.")
-        return api_key
-
+    @abstractmethod
     def get_model(self):
-        """Creates and returns the LLM model."""
-        if self.model_type == "gemini":
-            return GeminiModel(self.model_name, api_key=self.get_api_key())
-        elif self.model_type == "openai":
-            return OpenAIModel(self.model_name, api_key=self.get_api_key())
-        elif self.model_type == "anthropic":
-            return AnthropicModel(self.model_name, api_key=self.get_api_key())
-        else:
-            raise ValueError(f"Unsupported model type: {self.model_type}")
+        """Creates and returns the LLM model. Must be implemented by subclasses."""
+        pass
 
     def create_agent(self):
+
         """Creates and returns the pydantic-ai Agent."""
         if not self.result_type:
             raise ValueError("result_type must be defined in the derived class.")

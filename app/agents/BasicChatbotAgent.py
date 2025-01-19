@@ -1,5 +1,9 @@
 from pydantic import BaseModel, Field, field_validator
-from .base_agent import BaseAgent  # Import the BaseAgent
+from app.agents.base_agent import BaseAgent
+from app.config.llm_config import LLMConfig
+from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.models.gemini import GeminiModel
 
 class ChatResponse(BaseModel):
     text_response: str = Field(description="Your response.")
@@ -29,7 +33,9 @@ class BasicChatbotAgent(BaseAgent):
         """
         if 'settings' in data and isinstance(data['settings'], dict):
             data['settings'] = ChatbotSettings(**data['settings'])
-        super().__init__(**data)    
+            
+        super().__init__(**data)
+        self._agent = self.create_agent()
     
     model_type: str = Field(
         default="gemini",
@@ -88,6 +94,31 @@ class BasicChatbotAgent(BaseAgent):
         """
         self.messages = messages
 
+    def get_api_key(self):
+        """Retrieves the API key using the LLMConfig."""
+        config = LLMConfig()
+        llm_config = config.get_llm_config(self.model_name)
+        return config.get_api_key(llm_config)
+
+    def get_model(self):
+        """Creates and returns the LLM model using the configuration."""
+        config = LLMConfig()
+        model_type = config.get_model_type(self.model_name)
+        model_name = config.get_model_name(self.model_name)
+        api_key = self.get_api_key()
+
+        model_mapping = {
+            "gemini": GeminiModel,
+            "openai": OpenAIModel,
+            "anthropic": AnthropicModel
+        }
+
+        model_class = model_mapping.get(model_type)
+        if not model_class:
+            raise ValueError(f"Unsupported model type: {model_type}")
+
+        return model_class(model_name, api_key=api_key)
+
     async def run_agent(self, user_query: str, save_message_history: bool = True) -> str:
         """
         Run the chatbot agent with the given user input.
@@ -99,9 +130,8 @@ class BasicChatbotAgent(BaseAgent):
         Returns:
             str: The chatbot's response
         """
-        agent = self.create_agent()
         try:
-            response = await agent.run(user_query, message_history=self.messages if save_message_history else [])
+            response = await self._agent.run(user_query, message_history=self.messages if save_message_history else [])
 
             # Save the message history
             if save_message_history:
