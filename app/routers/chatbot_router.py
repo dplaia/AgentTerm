@@ -76,6 +76,11 @@ async def chat(request: ChatRequest):
             params['system_prompt'] = request.system_prompt
             
         chatbot_instances[request.client_id] = (BasicChatbotAgent(**params), time.time())
+        # print information about the new instance
+        print(f"New chatbot instance created for client ID: {request.client_id}")
+        print(f"Model type: {chatbot_instances[request.client_id][0].model_type}")
+        print(f"Model name: {chatbot_instances[request.client_id][0].model_name}")
+        print(f"System prompt: {chatbot_instances[request.client_id][0].system_prompt}")
     
     # Get the client's chatbot instance and update activity time
     chatbot, _ = chatbot_instances[request.client_id]
