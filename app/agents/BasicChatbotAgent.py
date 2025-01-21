@@ -106,6 +106,7 @@ class BasicChatbotAgent(BaseAgent):
         model_type = config.get_model_type(self.model_name)
         model_name = config.get_model_name(self.model_name)
         api_key = self.get_api_key()
+        base_url = config.get_base_url(self.model_name)
 
         model_mapping = {
             "gemini": GeminiModel,
@@ -117,7 +118,10 @@ class BasicChatbotAgent(BaseAgent):
         if not model_class:
             raise ValueError(f"Unsupported model type: {model_type}")
 
-        return model_class(model_name, api_key=api_key)
+        if model_type == "openai" and base_url:
+            return model_class(model_name, api_key=api_key, base_url=base_url)
+        else:
+            return model_class(model_name, api_key=api_key)
 
     async def run_agent(self, user_query: str, save_message_history: bool = True) -> str:
         """
@@ -142,3 +146,4 @@ class BasicChatbotAgent(BaseAgent):
             return cleaned_response
         except Exception as e:
             raise e
+

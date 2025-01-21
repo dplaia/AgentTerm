@@ -14,20 +14,26 @@ import asyncio
 from app.agents.BasicChatbotAgent import BasicChatbotAgent
 
 # Constants
-AGENTS_DIR = "./app/agents"
+# Update these constants at the top of the file
+AGENTS_DIR = os.path.join(os.path.dirname(__file__), "app", "agents")  # File system path
+AGENTS_PACKAGE = "app.agents"  # Python package path
 CONFIG_FILE = "config.json"
 
-def discover_agents():
-    """Finds and imports agent modules from the agents directory."""
-    agent_files = glob.glob(os.path.join(AGENTS_DIR, "*.py"))
-    agents = {}
-    for agent_file in agent_files:
-        module_name = os.path.splitext(os.path.basename(agent_file))[0]
-        try:
-            module = importlib.import_module(f"{AGENTS_DIR}.{module_name}")
-            agents[module_name] = module
-        except Exception as e:
-            print(f"Error importing {module_name}: {e}")
+def discover_agents():  
+    """Finds and imports agent modules from the agents directory."""  
+    agent_files = glob.glob(os.path.join(AGENTS_DIR, "*.py"))  
+    agents = {}  
+    for agent_file in agent_files:  
+        module_name = os.path.splitext(os.path.basename(agent_file))[0]  
+        if module_name == "__init__" or module_name == "base_agent":  
+            continue  # Skip base classes and init  
+
+        try:  
+            # Use absolute import with package specification  
+            module = importlib.import_module(f"{AGENTS_PACKAGE}.{module_name}")  
+            agents[module_name] = module  
+        except Exception as e:  
+            print(f"Error importing {module_name}: {e}")  
     return agents
 
 def load_config():

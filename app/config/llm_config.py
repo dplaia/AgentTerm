@@ -43,3 +43,10 @@ class LLMConfig:
         if not llm_config:
             raise ValueError(f"No configuration found for LLM: {llm_name}")
         return llm_config["model"]
+
+    def get_base_url(self, llm_name: str) -> Optional[str]:
+        """Get the base URL for a specific LLM configuration if it exists."""
+        llm_config = self.get_llm_config(llm_name)
+        if not llm_config:
+            raise ValueError(f"No configuration found for LLM: {llm_name}")
+        return llm_config.get("base_url")

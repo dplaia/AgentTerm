@@ -8,17 +8,17 @@
         },
         {
             "name": "deepseek-chat",
-            "api_key": "DEEPSEEK_API_KEY",
+            "api_key": "OPENROUTER_API_KEY",
             "model_type": "openai",
             "model": "deepseek-chat",
-            "base_url": "https://api.deepseek.com"
+            "base_url": "https://openrouter.ai/api/v1"
         },
         {
-            "name": "deepseek-reasoner",
-            "api_key": "DEEPSEEK_API_KEY",
+            "name": "deepseek-r1",
+            "api_key": "OPENROUTER_API_KEY",
             "model_type": "openai",
-            "model": "deepseek-reasoner",
-            "base_url": "https://api.deepseek.com"
+            "model": "deepseek/deepseek-r1",
+            "base_url": "https://openrouter.ai/api/v1"
         }
     ],
     "agents": [
