@@ -12,11 +12,11 @@ dependencies = [
     "pyaudio>=0.2.14",
     "mss>=10.0.0",
     "openai>=0.27.10",
-    "pydantic-ai==0.0.17",
     "google-genai>=0.4.0",
     "rich>=13.9.4",
     "fastapi[standard]>=0.115.6",
     "ipykernel>=6.29.5",
     "prompt-toolkit>=3.0.48",
     "apscheduler>=3.11.0",
+    "pydantic-ai>=0.0.19",
 ]
