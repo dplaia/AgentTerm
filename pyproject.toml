@@ -19,4 +19,5 @@ dependencies = [
     "prompt-toolkit>=3.0.48",
     "apscheduler>=3.11.0",
     "pydantic-ai>=0.0.19",
+    "baml-py>=0.72.1",
 ]
