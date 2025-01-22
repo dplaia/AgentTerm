@@ -15,7 +15,7 @@ class ChatbotSettings(BaseModel):
         description="Whether to maintain conversation context between messages"
     )
     default_llm: str = Field(
-        default="gemini-2.0-flash-exp",
+        default="gemini-2.0-flash-thinking",
         description="Default language model to use"
     )
 
@@ -31,8 +31,19 @@ class BasicChatbotAgent(BaseAgent):
             system_prompt (str, optional): Custom system prompt for the chatbot
             settings (ChatbotSettings, optional): Agent-specific settings
         """
+        # Load settings from config.json if not provided
+        if 'settings' not in data:
+            config = LLMConfig()
+            for agent in config._config.get("agents", []):
+                if agent["name"] == "BasicChatbotAgent":
+                    data['settings'] = agent.get("settings", {})
+                    break
+
         if 'settings' in data and isinstance(data['settings'], dict):
             data['settings'] = ChatbotSettings(**data['settings'])
+            # Set model_name from settings if not explicitly provided
+            if 'model_name' not in data and data['settings'].default_llm:
+                data['model_name'] = data['settings'].default_llm
             
         super().__init__(**data)
         self._agent = self.create_agent()
@@ -146,4 +157,3 @@ class BasicChatbotAgent(BaseAgent):
             return cleaned_response
         except Exception as e:
             raise e
-

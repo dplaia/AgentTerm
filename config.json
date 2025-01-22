@@ -7,6 +7,12 @@
             "model": "gemini-2.0-flash-exp"
         },
         {
+            "name": "gemini-2.0-flash-thinking",
+            "api_key": "GEMINI_API_KEY",
+            "model_type": "gemini",
+            "model": "gemini-2.0-flash-thinking-exp-01-21"
+        },
+        {
             "name": "deepseek-chat",
             "api_key": "OPENROUTER_API_KEY",
             "model_type": "openai",
@@ -26,10 +32,11 @@
             "name": "BasicChatbotAgent",
             "settings": {
                 "keep_context": true,
-                "default_llm": "gemini-2.0-flash-exp"
+                "default_llm": "gemini-2.0-flash-thinking"
             }
         }
     ],
     "current_llm": "gemini-2.0-flash-exp",
     "test_setting": "new_value"
 }
+
